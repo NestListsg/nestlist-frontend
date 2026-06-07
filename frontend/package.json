@@ -10,15 +10,15 @@
     "serve": "^14.2.1"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "serve": "serve -s build -l $PORT"
+    "start": "serve -s build -l $PORT",
+    "build": "react-scripts build"
   },
   "devDependencies": {
     "react-scripts": "5.0.1"
   },
   "engines": {
-    "node": "18.x"
+    "node": "18.x",
+    "npm": "9.x"
   },
   "browserslist": {
     "production": [">0.2%", "not dead", "not op_mini all"],
