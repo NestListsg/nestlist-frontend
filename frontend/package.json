@@ -17,7 +17,7 @@
     "react-scripts": "5.0.1"
   },
   "engines": {
-    "node": "18.x"
+    "node": "24.x"
   },
   "browserslist": {
     "production": [">0.2%", "not dead", "not op_mini all"],
