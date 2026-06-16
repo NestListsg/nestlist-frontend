@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { LOGO_B64 } from '../config';
 
-const API = 'https://nestlist-backend-production-870a.up.railway.app';
+const API = '';
 
 export default function Login({ onLogin }) {
   const [tab, setTab] = useState('login');
