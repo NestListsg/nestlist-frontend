@@ -272,7 +272,7 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
   padding: 40px 20px;
 }
 .login-box {
-  width: 100%; max-width: 440px; text-align: center;
+  width: 100%; max-width: 640px; text-align: center;
 display: flex; flex-direction: column; justify-content: space-between;
   min-height: calc(100vh - 80px);
 }
