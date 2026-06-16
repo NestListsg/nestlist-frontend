@@ -273,6 +273,8 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
 }
 .login-box {
   width: 100%; max-width: 440px; text-align: center;
+display: flex; flex-direction: column; justify-content: space-between;
+  min-height: calc(100vh - 80px);
 }
 .login-logo { margin-bottom: 8px; }
 .login-logo img { width: 160px; }
