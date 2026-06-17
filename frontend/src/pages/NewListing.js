@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -15,8 +15,74 @@ export default function NewListing({ agent, token }) {
   const [error, setError] = useState('');
   const [fbLoading, setFbLoading] = useState(false);
   const [fbResult, setFbResult] = useState('');
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [imageSuccess, setImageSuccess] = useState('');
+  const fileRef = useRef();
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImagePreview(URL.createObjectURL(file));
+    setImageLoading(true);
+    setImageSuccess('');
+    setError('');
+    try {
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const base64 = ev.target.result.split(',')[1];
+        const mediaType = file.type;
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 1000,
+            messages: [{
+              role: 'user',
+              content: [
+                {
+                  type: 'image',
+                  source: { type: 'base64', media_type: mediaType, data: base64 }
+                },
+                {
+                  type: 'text',
+                  text: `Extract property listing details from this image and return ONLY a JSON object with these exact fields:
+{
+  "property_type": "one of: Good Class Bungalow (GCB), Landed Bungalow, Semi-Detached, Terrace House, Penthouse, Ultra Luxury Investment Property, HDB Flat, Condominium",
+  "location": "full address or area",
+  "land_size": number in sqft or 0,
+  "built_up": number in sqft or 0,
+  "bedrooms": "e.g. 4 bedrooms, 3 bathrooms",
+  "price": "e.g. 25,000,000",
+  "features": "special features as comma separated text",
+  "plot_width": number in metres or 0,
+  "plot_depth": number in metres or 0,
+  "storeys": number or 0,
+  "site_coverage": number as percentage or 0
+}
+Return only valid JSON, nothing else.`
+                }
+              ]
+            }]
+          })
+        });
+        const data = await response.json();
+        const text = data.content[0].text.trim();
+        const clean = text.replace(/```json|```/g, '').trim();
+        const extracted = JSON.parse(clean);
+        setForm(f => ({ ...f, ...extracted }));
+        setImageSuccess('✅ Details extracted successfully! Please review and adjust if needed.');
+        setImageLoading(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      setError('Could not read image. Please fill in the form manually.');
+      setImageLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -61,6 +127,35 @@ export default function NewListing({ agent, token }) {
     <div className="page-content">
       <div className="page-title">Submit New Listing</div>
       <div className="page-subtitle">Fill in the details below. Claude will write your personalised listing automatically.</div>
+
+      {/* AI IMAGE UPLOAD SECTION */}
+      <div style={{
+        background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.3)',
+        borderRadius: '4px', padding: '20px 24px', marginBottom: '24px'
+      }}>
+        <div className="section-label" style={{marginBottom:'10px'}}>✨ Smart Fill — Upload a Property Screenshot</div>
+        <div style={{fontSize:'13px', color:'rgba(248,244,236,0.65)', marginBottom:'14px'}}>
+          Upload a screenshot or photo of any property listing. Claude will read it and fill in the form fields automatically.
+        </div>
+        <input
+          type="file" accept="image/*" ref={fileRef}
+          style={{display:'none'}} onChange={handleImageUpload}
+        />
+        <button
+          className="btn-gold" type="button"
+          style={{maxWidth:'280px', marginBottom: imagePreview ? '14px' : '0'}}
+          onClick={() => fileRef.current.click()}
+          disabled={imageLoading}
+        >
+          {imageLoading ? <><span className="spinner" />Reading image...</> : '📷 Upload Property Screenshot'}
+        </button>
+        {imagePreview && (
+          <div style={{marginTop:'12px'}}>
+            <img src={imagePreview} alt="Uploaded" style={{maxWidth:'200px', maxHeight:'150px', borderRadius:'4px', border:'1px solid rgba(212,175,55,0.3)'}} />
+          </div>
+        )}
+        {imageSuccess && <div className="success-msg" style={{marginTop:'12px'}}>{imageSuccess}</div>}
+      </div>
 
       <form onSubmit={handleSubmit}>
         <div className="form-grid">
