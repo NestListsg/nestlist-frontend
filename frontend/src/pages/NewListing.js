@@ -18,6 +18,7 @@ export default function NewListing({ agent, token }) {
   const [imageLoading, setImageLoading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
   const [imageSuccess, setImageSuccess] = useState('');
+  const [abortController, setAbortController] = useState(null);
   const fileRef = useRef();
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -29,58 +30,57 @@ export default function NewListing({ agent, token }) {
     setImageLoading(true);
     setImageSuccess('');
     setError('');
+
+    const controller = new AbortController();
+    setAbortController(controller);
+
+    const timeout = setTimeout(() => {
+      controller.abort();
+      setImageLoading(false);
+      setError('Image reading timed out. Please try again or fill in the form manually.');
+    }, 30000);
+
     try {
       const reader = new FileReader();
       reader.onload = async (ev) => {
         const base64 = ev.target.result.split(',')[1];
         const mediaType = file.type;
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 1000,
-            messages: [{
-              role: 'user',
-              content: [
-                {
-                  type: 'image',
-                  source: { type: 'base64', media_type: mediaType, data: base64 }
-                },
-                {
-                  type: 'text',
-                  text: `Extract property listing details from this image and return ONLY a JSON object with these exact fields:
-{
-  "property_type": "one of: Good Class Bungalow (GCB), Landed Bungalow, Semi-Detached, Terrace House, Penthouse, Ultra Luxury Investment Property, HDB Flat, Condominium",
-  "location": "full address or area",
-  "land_size": number in sqft or 0,
-  "built_up": number in sqft or 0,
-  "bedrooms": "e.g. 4 bedrooms, 3 bathrooms",
-  "price": "e.g. 25,000,000",
-  "features": "special features as comma separated text",
-  "plot_width": number in metres or 0,
-  "plot_depth": number in metres or 0,
-  "storeys": number or 0,
-  "site_coverage": number as percentage or 0
-}
-Return only valid JSON, nothing else.`
-                }
-              ]
-            }]
-          })
-        });
-        const data = await response.json();
-        const text = data.content[0].text.trim();
-        const clean = text.replace(/```json|```/g, '').trim();
-        const extracted = JSON.parse(clean);
-        setForm(f => ({ ...f, ...extracted }));
-        setImageSuccess('✅ Details extracted successfully! Please review and adjust if needed.');
-        setImageLoading(false);
+        try {
+          const response = await fetch(`${API}/api/extract-listing-image`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image_data: base64, media_type: mediaType }),
+            signal: controller.signal
+          });
+          clearTimeout(timeout);
+          const extracted = await response.json();
+          if (!response.ok) throw new Error(extracted.detail || 'Failed to read image');
+          setForm(f => ({ ...f, ...extracted }));
+          setImageSuccess('✅ Details extracted successfully! Please review and adjust if needed.');
+        } catch (err) {
+          clearTimeout(timeout);
+          if (err.name !== 'AbortError') {
+            setError('Could not read image. Please fill in the form manually.');
+          }
+        } finally {
+          setImageLoading(false);
+          setAbortController(null);
+        }
       };
       reader.readAsDataURL(file);
     } catch (err) {
+      clearTimeout(timeout);
       setError('Could not read image. Please fill in the form manually.');
       setImageLoading(false);
+    }
+  };
+
+  const cancelImageUpload = () => {
+    if (abortController) {
+      abortController.abort();
+      setImageLoading(false);
+      setAbortController(null);
+      setError('Image reading cancelled.');
     }
   };
 
@@ -141,14 +141,29 @@ Return only valid JSON, nothing else.`
           type="file" accept="image/*" ref={fileRef}
           style={{display:'none'}} onChange={handleImageUpload}
         />
-        <button
-          className="btn-gold" type="button"
-          style={{maxWidth:'280px', marginBottom: imagePreview ? '14px' : '0'}}
-          onClick={() => fileRef.current.click()}
-          disabled={imageLoading}
-        >
-          {imageLoading ? <><span className="spinner" />Reading image...</> : '📷 Upload Property Screenshot'}
-        </button>
+        <div style={{display:'flex', gap:'12px', alignItems:'center'}}>
+          <button
+            className="btn-gold" type="button"
+            style={{maxWidth:'280px'}}
+            onClick={() => fileRef.current.click()}
+            disabled={imageLoading}
+          >
+            {imageLoading ? <><span className="spinner" />Reading image...</> : '📷 Upload Property Screenshot'}
+          </button>
+          {imageLoading && (
+            <button
+              type="button"
+              onClick={cancelImageUpload}
+              style={{
+                background: 'transparent', border: '1px solid rgba(255,107,107,0.5)',
+                color: '#ff6b6b', padding: '8px 16px', borderRadius: '3px',
+                cursor: 'pointer', fontSize: '12px', fontFamily: "'Montserrat', sans-serif"
+              }}
+            >
+              Cancel
+            </button>
+          )}
+        </div>
         {imagePreview && (
           <div style={{marginTop:'12px'}}>
             <img src={imagePreview} alt="Uploaded" style={{maxWidth:'200px', maxHeight:'150px', borderRadius:'4px', border:'1px solid rgba(212,175,55,0.3)'}} />
