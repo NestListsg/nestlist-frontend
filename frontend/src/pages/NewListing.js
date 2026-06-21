@@ -16,7 +16,7 @@ export default function NewListing({ agent, token }) {
   const [fbLoading, setFbLoading] = useState(false);
   const [fbResult, setFbResult] = useState('');
   const [imageLoading, setImageLoading] = useState(false);
-  const [imagePreview, setImagePreview] = useState(null);
+  const [imagePreview, setImagePreview] = useState([]);
   const [imageSuccess, setImageSuccess] = useState('');
   const [abortController, setAbortController] = useState(null);
   const fileRef = useRef();
@@ -52,7 +52,7 @@ export default function NewListing({ agent, token }) {
       });
 
       const images = await Promise.all(files.map(readFile));
-      setImagePreview(URL.createObjectURL(files[0]));
+      setImagePreviews(files.map(f => URL.createObjectURL(f)));
 
       const response = await fetch(`${API}/api/extract-listing-image`, {
         method: 'POST',
@@ -87,7 +87,7 @@ export default function NewListing({ agent, token }) {
   };
 
   const clearImages = () => {
-    setImagePreview(null);
+    setImagePreviews([]);
     setImageSuccess('');
     setError('');
     if (fileRef.current) fileRef.current.value = '';
@@ -172,9 +172,11 @@ export default function NewListing({ agent, token }) {
             </button>
           )}
         </div>
-        {imagePreview && (
-          <div style={{marginTop:'12px'}}>
-            <img src={imagePreview} alt="Uploaded" style={{maxWidth:'200px', maxHeight:'150px', borderRadius:'4px', border:'1px solid rgba(212,175,55,0.3)'}} />
+        {imagePreviews.length > 0 && (
+          <div style={{marginTop:'12px', display:'flex', gap:'8px', flexWrap:'wrap'}}>
+            {imagePreviews.map((src, i) => (
+              <img key={i} src={src} alt={`Uploaded ${i+1}`} style={{maxWidth:'150px', maxHeight:'120px', borderRadius:'4px', border:'1px solid rgba(212,175,55,0.3)'}} />
+            ))}
           </div>
         )}
         {imageSuccess && <div className="success-msg" style={{marginTop:'12px'}}>{imageSuccess}</div>}
