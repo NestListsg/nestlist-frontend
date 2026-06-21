@@ -16,7 +16,7 @@ export default function NewListing({ agent, token }) {
   const [fbLoading, setFbLoading] = useState(false);
   const [fbResult, setFbResult] = useState('');
   const [imageLoading, setImageLoading] = useState(false);
-  const [imagePreview, setImagePreview] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState([]);
   const [imageSuccess, setImageSuccess] = useState('');
   const [abortController, setAbortController] = useState(null);
   const fileRef = useRef();
