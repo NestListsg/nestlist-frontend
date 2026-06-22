@@ -23,6 +23,13 @@ export default function NewListing({ agent, token }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const clearForm = () => {
+    setForm({ property_type: 'Good Class Bungalow (GCB)', location: '', land_size: 0, built_up: 0, bedrooms: '', price: '', features: '', plot_width: 0, plot_depth: 0, storeys: 0, site_coverage: 0, sg_citizen: false });
+    setDeclaration(false);
+    setResult(null);
+    setError('');
+  };
+
   const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files).slice(0, 5);
     if (!files.length) return;
@@ -261,9 +268,14 @@ export default function NewListing({ agent, token }) {
         </div>
 
         {error && <div className="error-msg">{error}</div>}
-        <button className="btn-primary" type="submit" disabled={loading} style={{marginTop:'16px'}}>
-          {loading ? <><span className="spinner" />Generating your listing...</> : 'Generate My Listing Automatically'}
-        </button>
+        <div style={{display:'flex', gap:'12px', marginTop:'16px'}}>
+          <button type="button" onClick={clearForm} style={{background:'transparent', border:'1px solid rgba(212,175,55,0.5)', color:'#F0C84A', padding:'10px 20px', borderRadius:'3px', cursor:'pointer', fontSize:'13px', fontFamily:"'Montserrat', sans-serif"}}>
+            Clear Form
+          </button>
+          <button className="btn-primary" type="submit" disabled={loading}>
+            {loading ? <><span className="spinner" />Generating your listing...</> : 'Generate My Listing Automatically'}
+          </button>
+        </div>
       </form>
 
       {result && (
@@ -294,5 +306,3 @@ export default function NewListing({ agent, token }) {
     </div>
   );
 }
-
-                 
