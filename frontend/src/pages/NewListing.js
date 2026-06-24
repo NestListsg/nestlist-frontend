@@ -19,7 +19,12 @@ export default function NewListing({ agent, token }) {
   const [imagePreviews, setImagePreviews] = useState([]);
   const [imageSuccess, setImageSuccess] = useState('');
   const [abortController, setAbortController] = useState(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [photoSuccess, setPhotoSuccess] = useState('');
+  const [photoError, setPhotoError] = useState('');
+  const [uploadedPhotoUrls, setUploadedPhotoUrls] = useState([]);
   const fileRef = useRef();
+  const photoRef = useRef();
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -28,6 +33,9 @@ export default function NewListing({ agent, token }) {
     setDeclaration(false);
     setResult(null);
     setError('');
+    setPhotoSuccess('');
+    setPhotoError('');
+    setUploadedPhotoUrls([]);
   };
 
   const handleImageUpload = async (e) => {
@@ -98,6 +106,48 @@ export default function NewListing({ agent, token }) {
     setImageSuccess('');
     setError('');
     if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const handlePhotoUpload = async (e) => {
+    const files = Array.from(e.target.files).slice(0, 15);
+    if (!files.length) return;
+    if (!result || !result.listing) {
+      setPhotoError('Please generate a listing first before uploading photos.');
+      return;
+    }
+
+    setPhotoLoading(true);
+    setPhotoSuccess('');
+    setPhotoError('');
+
+    try {
+      const readFile = (file) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve({
+          image_data: ev.target.result.split(',')[1],
+          media_type: file.type
+        });
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const images = await Promise.all(files.map(readFile));
+
+      const response = await fetch(`${API}/api/listings/${result.listing.id}/upload-images`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ images })
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Failed to upload photos');
+      setUploadedPhotoUrls(data.image_urls);
+      setPhotoSuccess(`${files.length} photo${files.length > 1 ? 's' : ''} uploaded successfully!`);
+    } catch (err) {
+      setPhotoError(`Failed to upload photos: ${err.message}`);
+    } finally {
+      setPhotoLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -293,8 +343,36 @@ export default function NewListing({ agent, token }) {
               <div className="listing-output">
                 <div className="listing-text">{result.listing.content}</div>
               </div>
+
               <div className="divider" />
-              <div className="section-label">Step 3 - Post to Facebook</div>
+              <div className="section-label">Step 3 - Upload Property Photos</div>
+              <div style={{fontSize:'13px', color:'rgba(248,244,236,0.65)', marginBottom:'14px'}}>
+                Upload up to 15 property photos. These will be saved to your listing and used for social media posts.
+              </div>
+              <input
+                type="file" accept="image/*" ref={photoRef} multiple
+                style={{display:'none'}} onChange={handlePhotoUpload}
+              />
+              <button
+                className="btn-gold" type="button"
+                style={{maxWidth:'320px'}}
+                onClick={() => photoRef.current.click()}
+                disabled={photoLoading}
+              >
+                {photoLoading ? <><span className="spinner" />Uploading photos...</> : 'Upload Property Photos (up to 15)'}
+              </button>
+              {photoError && <div className="error-msg" style={{marginTop:'12px'}}>{photoError}</div>}
+              {photoSuccess && <div className="success-msg" style={{marginTop:'12px'}}>{photoSuccess}</div>}
+              {uploadedPhotoUrls.length > 0 && (
+                <div style={{marginTop:'12px', display:'flex', gap:'8px', flexWrap:'wrap'}}>
+                  {uploadedPhotoUrls.map((url, i) => (
+                    <img key={i} src={url} alt={`Property ${i+1}`} style={{maxWidth:'150px', maxHeight:'120px', borderRadius:'4px', border:'1px solid rgba(212,175,55,0.3)'}} />
+                  ))}
+                </div>
+              )}
+
+              <div className="divider" />
+              <div className="section-label">Step 4 - Post to Facebook</div>
               <button className="btn-gold" style={{maxWidth:'320px'}} onClick={postToFacebook} disabled={fbLoading}>
                 {fbLoading ? <><span className="spinner" />Posting...</> : 'Post to NestList Facebook Page'}
               </button>
