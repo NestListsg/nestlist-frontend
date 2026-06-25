@@ -18,7 +18,7 @@ export default function Login({ onLogin }) {
 
   const eyeStyle = {
     position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
-    cursor: 'pointer', color: 'rgba(248,244,236,0.5)', fontSize: '16px',
+    cursor: 'pointer', color: 'rgba(248,244,236,0.8)', fontSize: '16px',
     userSelect: 'none', lineHeight: '1'
   };
 
