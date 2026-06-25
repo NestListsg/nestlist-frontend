@@ -86,7 +86,7 @@ export default function Login({ onLogin }) {
               <div style={{position:'relative'}}>
                 <input className="form-input" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} style={{paddingRight:'40px'}} required />
                 <span style={eyeStyle} onClick={() => setShowPassword(v => !v)}>
-                  {showPassword ? '🙈' : '👁'}
+                  {showPassword ? 'Hide' : 'Show'}
                 </span>
               </div>
             </div>
