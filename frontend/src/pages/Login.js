@@ -13,6 +13,14 @@ export default function Login({ onLogin }) {
   const [password2, setPassword2] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPassword2, setShowPassword2] = useState(false);
+
+  const eyeStyle = {
+    position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
+    cursor: 'pointer', color: 'rgba(248,244,236,0.5)', fontSize: '16px',
+    userSelect: 'none', lineHeight: '1'
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -75,7 +83,12 @@ export default function Login({ onLogin }) {
             </div>
             <div className="form-group">
               <label className="form-label">Password</label>
-              <input className="form-input" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+              <div style={{position:'relative'}}>
+                <input className="form-input" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} style={{paddingRight:'40px'}} required />
+                <span style={eyeStyle} onClick={() => setShowPassword(v => !v)}>
+                  {showPassword ? '🙈' : '👁'}
+                </span>
+              </div>
             </div>
             {error && <div className="error-msg">{error}</div>}
             <button className="btn-primary" type="submit" disabled={loading}>
@@ -109,11 +122,21 @@ export default function Login({ onLogin }) {
             </div>
             <div className="form-group">
               <label className="form-label">Password</label>
-              <input className="form-input" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+              <div style={{position:'relative'}}>
+                <input className="form-input" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} style={{paddingRight:'40px'}} required />
+                <span style={eyeStyle} onClick={() => setShowPassword(v => !v)}>
+                  {showPassword ? '🙈' : '👁'}
+                </span>
+              </div>
             </div>
             <div className="form-group">
               <label className="form-label">Confirm Password</label>
-              <input className="form-input" type="password" value={password2} onChange={e => setPassword2(e.target.value)} required />
+              <div style={{position:'relative'}}>
+                <input className="form-input" type={showPassword2 ? 'text' : 'password'} value={password2} onChange={e => setPassword2(e.target.value)} style={{paddingRight:'40px'}} required />
+                <span style={eyeStyle} onClick={() => setShowPassword2(v => !v)}>
+                  {showPassword2 ? '🙈' : '👁'}
+                </span>
+              </div>
             </div>
             {error && <div className="error-msg">{error}</div>}
             <button className="btn-primary" type="submit" disabled={loading}>
