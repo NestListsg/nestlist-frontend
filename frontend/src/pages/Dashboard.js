@@ -4,11 +4,49 @@ const API = process.env.REACT_APP_API_URL || '';
 
 export default function Dashboard({ agent, token, setPage }) {
   const [listings, setListings] = useState([]);
+  const [pulse, setPulse] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [pulseForm, setPulseForm] = useState(null);
+  const [pulseSaving, setPulseSaving] = useState(false);
+  const [pulseSaved, setPulseSaved] = useState(false);
+
+  const isAdmin = agent?.email === 'leesbjane@gmail.com';
 
   useEffect(() => {
     fetch(`${API}/api/listings`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json()).then(setListings).catch(() => {});
+    fetch(`${API}/api/market-pulse`)
+      .then(r => r.json()).then(data => { setPulse(data); setPulseForm(data); }).catch(() => {});
   }, [token]);
+
+  const savePulse = async () => {
+    setPulseSaving(true);
+    try {
+      const res = await fetch(`${API}/api/market-pulse`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(pulseForm)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to save');
+      setPulse({ ...pulseForm });
+      setEditing(false);
+      setPulseSaved(true);
+      setTimeout(() => setPulseSaved(false), 3000);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setPulseSaving(false);
+    }
+  };
+
+  const pulseFields = pulse ? [
+    ['GCB Transactions', pulse.gcb_transactions, 'gcb_transactions'],
+    ['Total GCB Value', pulse.gcb_total_value, 'gcb_total_value'],
+    ['Avg. GCB Price psf', pulse.gcb_avg_psf, 'gcb_avg_psf'],
+    ['Largest Transaction', pulse.gcb_largest, 'gcb_largest'],
+    ['Nassim Road Price Range', pulse.nassim_range, 'nassim_range'],
+  ] : [];
 
   return (
     <div className="nl-content">
@@ -52,23 +90,71 @@ export default function Dashboard({ agent, token, setPage }) {
           </div>
         </div>
         <div className="market-panel">
-          <div className="market-title">Singapore Market Pulse</div>
-          {[
-            ['GCB Transactions 2025', '~36 units'],
-            ['Total GCB Value 2025', 'SGD 1.36B'],
-            ['Avg. GCB Price psf 2025', 'SGD 2,134'],
-            ['Largest 2025 Transaction', 'SGD 148M'],
-            ['Nassim Road Price Range', 'SGD 2,500–4,000 psf'],
-          ].map(([label, value]) => (
-            <div key={label} className="market-item">
-              <div className="market-label">{label}</div>
-              <div className="market-value">{value}</div>
+          <div className="market-title" style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+            <span>Singapore Market Pulse</span>
+            {isAdmin && !editing && (
+              <button
+                onClick={() => setEditing(true)}
+                style={{fontSize:'11px', background:'transparent', border:'1px solid rgba(212,175,55,0.4)', color:'rgba(212,175,55,0.7)', padding:'3px 10px', borderRadius:'3px', cursor:'pointer', fontFamily:"'Montserrat', sans-serif"}}
+              >
+                Edit
+              </button>
+            )}
+          </div>
+
+          {editing ? (
+            <div style={{marginTop:'12px'}}>
+              {[
+                ['GCB Transactions', 'gcb_transactions'],
+                ['Total GCB Value', 'gcb_total_value'],
+                ['Avg. GCB Price psf', 'gcb_avg_psf'],
+                ['Largest Transaction', 'gcb_largest'],
+                ['Nassim Road Price Range', 'nassim_range'],
+              ].map(([label, key]) => (
+                <div key={key} style={{marginBottom:'10px'}}>
+                  <div style={{fontSize:'11px', color:'rgba(248,244,236,0.5)', marginBottom:'3px'}}>{label}</div>
+                  <input
+                    value={pulseForm[key] || ''}
+                    onChange={e => setPulseForm(f => ({ ...f, [key]: e.target.value }))}
+                    style={{width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(212,175,55,0.3)', color:'#F0C84A', padding:'6px 10px', borderRadius:'3px', fontSize:'13px', fontFamily:"'Montserrat', sans-serif", boxSizing:'border-box'}}
+                  />
+                </div>
+              ))}
+              <div style={{display:'flex', gap:'8px', marginTop:'12px'}}>
+                <button
+                  onClick={savePulse}
+                  disabled={pulseSaving}
+                  style={{background:'rgba(212,175,55,0.2)', border:'1px solid rgba(212,175,55,0.5)', color:'#F0C84A', padding:'6px 16px', borderRadius:'3px', cursor:'pointer', fontSize:'12px', fontFamily:"'Montserrat', sans-serif"}}
+                >
+                  {pulseSaving ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={() => { setEditing(false); setPulseForm(pulse); }}
+                  style={{background:'transparent', border:'1px solid rgba(255,255,255,0.2)', color:'rgba(248,244,236,0.5)', padding:'6px 16px', borderRadius:'3px', cursor:'pointer', fontSize:'12px', fontFamily:"'Montserrat', sans-serif"}}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
-          ))}
+          ) : (
+            <>
+              {pulseFields.map(([label, value]) => (
+                <div key={label} className="market-item">
+                  <div className="market-label">{label}</div>
+                  <div className="market-value">{value}</div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {pulseSaved && <div style={{marginTop:'10px', color:'#4CAF50', fontSize:'12px'}}>Market data updated successfully.</div>}
+
           <div className="market-disclaimer">
             ℹ <strong style={{color:'rgba(212,175,55,0.8)'}}>Disclaimer:</strong> Data sourced from URA Realis & EdgeProp Singapore. Figures are indicative and updated periodically. NestList does not warrant the accuracy of market data. Always verify with URA or a licensed professional before making property decisions.
           </div>
-          <div className="market-source">Source: URA Realis / EdgeProp &nbsp;|&nbsp; Last updated: Jan 2026 &nbsp;|&nbsp; Live URA API integration coming soon</div>
+          <div className="market-source">
+            Source: URA Realis / EdgeProp &nbsp;|&nbsp; Last updated: {pulse?.last_updated || 'Jan 2026'}
+          </div>
         </div>
       </div>
     </div>
