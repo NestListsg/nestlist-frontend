@@ -93,7 +93,7 @@ function App() {
       case 'Dashboard': return <Dashboard agent={agent} token={token} setPage={setPage} />;
       case 'New Listing': return <NewListing agent={agent} token={token} />;
       case 'My Listings': return <MyListings agent={agent} token={token} />;
-      case 'Enquiries': return <Enquiries />;
+      case 'Enquiries': return <Enquiries agent={agent} token={token} />;
       case 'My Profile': return <MyProfile agent={agent} token={token} onUpdate={updateAgent} />;
       case 'Billing': return <Billing />;
       default: return <Dashboard agent={agent} token={token} setPage={setPage} />;
