@@ -3,7 +3,6 @@ import React, { useEffect, useState } from 'react';
 const API = process.env.REACT_APP_API_URL || '';
 
 function generateCaption(listing, platform) {
-  const headline = `${listing.property_type} | ${listing.location} | SGD ${listing.price}`;
   const body = listing.content?.slice(0, 800) || '';
 
   if (platform === 'facebook') {
@@ -80,15 +79,20 @@ export default function MyListings({ agent, token }) {
   const [deleting, setDeleting] = useState({});
 
   useEffect(() => {
-    fetch(`${API}/api/listings`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json()).then(data => setListings(Array.isArray(data) ? data : [])).catch(() => {});
+    fetch(`${API}/api/listings`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(data => setListings(Array.isArray(data) ? data : []))
+      .catch(() => setListings([]));
   }, [token]);
 
   const postToFacebook = async (id) => {
     setFbLoading(l => ({ ...l, [id]: true }));
     try {
       const res = await fetch(`${API}/api/listings/${id}/post-facebook`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` }
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed');
@@ -160,7 +164,6 @@ export default function MyListings({ agent, token }) {
 
           {expanded === l.id && (
             <>
-              {/* Property Images */}
               {l.images && l.images.length > 0 && (
                 <div style={{ padding: '16px 20px 0', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {l.images.map((url, i) => (
@@ -189,10 +192,8 @@ export default function MyListings({ agent, token }) {
                 </div>
               )}
 
-              {/* Listing Content */}
               <div className="listing-card-body">{l.content}</div>
 
-              {/* Facebook Post Button */}
               <div style={{ padding: '0 20px 8px', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <button className="btn-gold" style={{ maxWidth: '260px' }} onClick={() => postToFacebook(l.id)} disabled={fbLoading[l.id]}>
                   {fbLoading[l.id] ? 'Posting...' : '📘 Auto-Post to NestList Facebook'}
@@ -204,7 +205,6 @@ export default function MyListings({ agent, token }) {
                 </div>
               )}
 
-              {/* Share This Listing Panel */}
               <div style={{
                 margin: '8px 20px 20px',
                 background: 'rgba(212,175,55,0.06)',
@@ -217,7 +217,6 @@ export default function MyListings({ agent, token }) {
                   Select a platform, copy the caption, then paste it directly into your own account.
                 </div>
 
-                {/* Platform Selector */}
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
                   {PLATFORMS.map(p => (
                     <button
@@ -240,7 +239,6 @@ export default function MyListings({ agent, token }) {
                   ))}
                 </div>
 
-                {/* Caption Box */}
                 {PLATFORMS.map(p => getActivePlatform(l.id) === p.key && (
                   <div key={p.key}>
                     <div style={{
