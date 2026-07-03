@@ -81,7 +81,7 @@ export default function MyListings({ agent, token }) {
 
   useEffect(() => {
     fetch(`${API}/api/listings`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json()).then(setListings).catch(() => {});
+      .then(r => r.json()).then(data => setListings(Array.isArray(data) ? data : [])).catch(() => {});
   }, [token]);
 
   const postToFacebook = async (id) => {
