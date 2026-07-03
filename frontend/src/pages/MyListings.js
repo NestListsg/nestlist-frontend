@@ -136,7 +136,6 @@ export default function MyListings({ agent, token }) {
         ? <div className="page-subtitle">You have {listings.length} listing(s).</div>
         : <div className="page-subtitle" style={{ fontStyle: 'italic' }}>No listings yet. Go to New Listing to create your first one.</div>
       }
-
       {listings.map(l => (
         <div key={l.id} className="listing-card">
           <div className="listing-card-header" onClick={() => setExpanded(expanded === l.id ? null : l.id)}>
@@ -163,7 +162,7 @@ export default function MyListings({ agent, token }) {
           </div>
 
           {expanded === l.id && (
-            <>
+            <div>
               {l.images && l.images.length > 0 && (
                 <div style={{ padding: '16px 20px 0', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {l.images.map((url, i) => (
@@ -173,7 +172,7 @@ export default function MyListings({ agent, token }) {
                         alt={`Property ${i + 1}`}
                         style={{ width: '150px', height: '110px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(212,175,55,0.3)' }}
                       />
-                      
+                      <a
                         href={url}
                         download
                         target="_blank"
@@ -195,12 +194,21 @@ export default function MyListings({ agent, token }) {
               <div className="listing-card-body">{l.content}</div>
 
               <div style={{ padding: '0 20px 8px', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                <button className="btn-gold" style={{ maxWidth: '260px' }} onClick={() => postToFacebook(l.id)} disabled={fbLoading[l.id]}>
+                <button
+                  className="btn-gold"
+                  style={{ maxWidth: '260px' }}
+                  onClick={() => postToFacebook(l.id)}
+                  disabled={fbLoading[l.id]}
+                >
                   {fbLoading[l.id] ? 'Posting...' : '📘 Auto-Post to NestList Facebook'}
                 </button>
               </div>
+
               {fbResults[l.id] && (
-                <div className={fbResults[l.id].startsWith('Posted') ? 'success-msg' : 'error-msg'} style={{ margin: '0 20px 8px' }}>
+                <div
+                  className={fbResults[l.id].startsWith('Posted') ? 'success-msg' : 'error-msg'}
+                  style={{ margin: '0 20px 8px' }}
+                >
                   {fbResults[l.id]}
                 </div>
               )}
@@ -266,7 +274,7 @@ export default function MyListings({ agent, token }) {
                         {copied[`${l.id}-${p.key}`] ? '✅ Copied!' : '📋 Copy Caption'}
                       </button>
 
-                      
+                      <a
                         href={p.url}
                         target="_blank"
                         rel="noreferrer"
@@ -276,7 +284,6 @@ export default function MyListings({ agent, token }) {
                           color: '#F0C84A',
                           padding: '10px 20px',
                           borderRadius: '3px',
-                          cursor: 'pointer',
                           fontSize: '13px',
                           fontFamily: "'Montserrat', sans-serif",
                           textDecoration: 'none',
@@ -290,7 +297,7 @@ export default function MyListings({ agent, token }) {
                   </div>
                 ))}
               </div>
-            </>
+            </div>
           )}
         </div>
       ))}
