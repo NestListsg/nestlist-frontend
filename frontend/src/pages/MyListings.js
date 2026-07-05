@@ -2,10 +2,9 @@ import React, { useEffect, useState } from 'react';
 
 const API = process.env.REACT_APP_API_URL || '';
 
-is this how it bshould look before i commit?
-  function generateCaption(listing, platform, style) {
-  const body = listing.content?.replace(/^-+\n?/gm, '').trim().slice(0, 800) || '';
-  const shortBody = listing.content?.replace(/^-+\n?/gm, '').trim().slice(0, 300) || '';
+function generateCaption(listing, platform, style) {
+  const body = listing.content?.slice(0, 800) || '';
+  const shortBody = listing.content?.slice(0, 300) || '';
 
   const bullets = `• ${listing.land_size ? listing.land_size.toLocaleString() + ' sqft land' : 'Land on request'}
 • ${listing.built_up ? listing.built_up.toLocaleString() + ' sqft built-up' : 'Built-up on request'}
