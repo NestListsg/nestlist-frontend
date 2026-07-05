@@ -3,8 +3,14 @@ import React, { useEffect, useState } from 'react';
 const API = process.env.REACT_APP_API_URL || '';
 
 function generateCaption(listing, platform, style) {
-  const body = listing.content?.slice(0, 800) || '';
-  const shortBody = listing.content?.slice(0, 300) || '';
+  const cleanContent = (listing.content || '')
+    .replace(/^---/gm, '')
+    .replace(/\*\*/g, '')
+    .replace(/^#+\s/gm, '')
+    .replace(/\|/g, '')
+    .trim();
+  const body = cleanContent.slice(0, 800);
+  const shortBody = cleanContent.slice(0, 300);
 
   const bullets = `• ${listing.land_size ? listing.land_size.toLocaleString() + ' sqft land' : 'Land on request'}
 • ${listing.built_up ? listing.built_up.toLocaleString() + ' sqft built-up' : 'Built-up on request'}
