@@ -375,7 +375,7 @@ export default function MyListings({ agent, token }) {
                 </div>
               )}
 
-              <div className="listing-card-body">{l.content}</div>
+              <div className="listing-card-body">{(l.content || '').replace(/\*\*/g, '').replace(/^#+\s/gm, '').replace(/---/g, '').trim()}</div>
 
               <div style={{ padding: '0 20px 8px', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <button
