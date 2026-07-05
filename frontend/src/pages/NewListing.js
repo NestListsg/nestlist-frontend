@@ -7,7 +7,7 @@ const DEFAULT_FORM = {
   property_type: 'Good Class Bungalow (GCB)', location: '', land_size: 0,
   built_up: 0, bedrooms: '', price: '', features: '',
   plot_width: 0, plot_depth: 0, storeys: 0, site_coverage: 0,
-  sg_citizen: false
+  sg_citizen: true
 };
 
 export default function NewListing({ agent, token }) {
@@ -44,6 +44,7 @@ export default function NewListing({ agent, token }) {
   }, [form]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  // sg_citizen defaults to true - GCB/landed purchases are Singapore Citizens only
 
   const clearForm = () => {
     setForm(DEFAULT_FORM);
@@ -319,7 +320,7 @@ export default function NewListing({ agent, token }) {
               <input className="form-input" type="number" value={form.land_size} onChange={e => set('land_size', +e.target.value)} />
             </div>
             <div className="form-group">
-              <label className="form-label">4. Plot Width (metres)</label>
+              <label className="form-label">4. Plot Width / Frontage</label>
               <input className="form-input" type="number" step="0.1" value={form.plot_width} onChange={e => set('plot_width', +e.target.value)} />
             </div>
             <div className="form-group">
@@ -356,10 +357,7 @@ export default function NewListing({ agent, token }) {
           <textarea className="form-textarea" value={form.features} onChange={e => set('features', e.target.value)} placeholder="e.g. Private pool, 3-car garage, newly renovated" />
         </div>
 
-        <div className="form-checkbox">
-          <input type="checkbox" id="sg_citizen" checked={form.sg_citizen} onChange={e => set('sg_citizen', e.target.checked)} />
-          <label htmlFor="sg_citizen">I confirm the buyer is a Singapore Citizen (required for GCB purchases)</label>
-        </div>
+        
         <div className="form-checkbox">
           <input type="checkbox" id="declaration" checked={declaration} onChange={e => setDeclaration(e.target.checked)} />
           <label htmlFor="declaration">I confirm all details are accurate and truthful.</label>
