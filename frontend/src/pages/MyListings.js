@@ -165,6 +165,17 @@ ${listing.content?.slice(0, 400) || ''}...
 Reply to arrange a private viewing or visit nestlist.sg. Thank you! 🙏`
   };
 
+  const tiktok = {
+    tiktok: `${listing.property_type} in ${listing.location} 🏡
+SGD ${listing.price}
+${listing.land_size ? listing.land_size.toLocaleString() + ' sqft' : ''} | ${listing.bedrooms || ''}
+Upload your property video and use this caption 👆
+DM to arrange viewing 🔑
+
+#SingaporeProperty #PropertySG #LandedSG #RealEstateSG #SGProperty`
+  };
+
+  if (platform === 'tiktok') return tiktok.tiktok || '';
   if (style === 'tldr') return tldr[platform] || '';
   if (style === 'combined') return combined[platform] || '';
   return long[platform] || '';
@@ -175,6 +186,7 @@ const PLATFORMS = [
   { key: 'instagram', label: 'Instagram', emoji: '📸', url: 'https://www.instagram.com' },
   { key: 'linkedin', label: 'LinkedIn', emoji: '💼', url: 'https://www.linkedin.com/feed' },
   { key: 'whatsapp', label: 'WhatsApp', emoji: '💬', url: 'https://web.whatsapp.com' },
+  { key: 'tiktok', label: 'TikTok', emoji: '🎵', url: 'https://www.tiktok.com/upload' },
 ];
 
 const STYLES = [
