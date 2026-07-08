@@ -142,7 +142,7 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
   border-bottom: 1px solid rgba(0,0,0,0.2); flex-shrink: 0;
 }
 .nl-welcome-text { color: rgba(248,244,236,0.95); font-size: 16px; letter-spacing: 0.03em; }
-.nl-welcome-text strong { color: var(--cream); font-weight: 600; font-family: 'Cormorant Garamond', serif; font-size: 20px; }
+.nl-welcome-text strong { color: var(--cream); font-weight: 500; font-family: 'Cormorant Garamond', serif; font-size: 16px; }
 .nl-badge {
   border: 1px solid var(--gold); color: var(--gold);
   font-size: 11px; padding: 5px 16px; border-radius: 2px;
