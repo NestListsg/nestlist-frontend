@@ -9,7 +9,7 @@ import Enquiries from './pages/Enquiries';
 import MyProfile from './pages/MyProfile';
 import Billing from './pages/Billing';
 
-const LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgABAAAAQACAYAAAB/HSuDAEAAE1EQVR4nOz9ebxsd1ng3++a6659njmnCnTyQAJGQhB5qABJKJec';
+const LOGO = '/logo.jpg';
 
 function Sidebar({ page, setPage, agent, onLogout, isOpen, onClose }) {
   const navItems = ['Dashboard', 'New Listing', 'My Listings', 'Enquiries', 'My Profile', 'Billing'];
