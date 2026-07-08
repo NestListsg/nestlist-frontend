@@ -6,8 +6,8 @@
     --gold-light: rgba(212,175,55,0.9);
     --gold-faint: rgba(212,175,55,0.15);
     --cream: #F8F4EC;
-    --cream-dim: rgba(248,244,236,0.65);
-    --cream-faint: rgba(248,244,236,0.4);
+    --cream-dim: rgba(248,244,236,0.9);
+    --cream-faint: rgba(248,244,236,0.65);
 }
 
 html, body, #root { background: #0E2820 !important; min-height: 100vh; }
@@ -166,7 +166,7 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
     display: flex; justify-content: space-between; align-items: center;
     border-bottom: 1px solid rgba(0,0,0,0.2); flex-shrink: 0;
 }
-.nl-welcome-text { color: rgba(248,244,236,0.95); font-size: 16px; letter-spacing: 0.03em; }
+.nl-welcome-text { color: rgba(248,244,236,0.95); font-size: 18px; letter-spacing: 0.03em; font-family: 'Cormorant Garamond', serif; }
 .nl-welcome-text strong { color: var(--cream); font-weight: 500; font-family: 'Cormorant Garamond', serif; font-size: 16px; }
 .nl-badge {
     border: 1px solid var(--gold); color: var(--gold);
@@ -415,7 +415,7 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
 }
 .listing-card-title { font-size: 15px; color: var(--cream); letter-spacing: 0.03em; }
 .listing-card-date { font-size: 11px; color: var(--cream-faint); }
-.listing-card-body { margin-top: 16px; font-size: 13px; line-height: 1.8; color: var(--cream-dim); white-space: pre-wrap; }
+.listing-card-body { margin-top: 16px; font-size: 16px; line-height: 1.8; color: var(--cream-dim); white-space: pre-wrap; }
 
 /* — SUCCESS — */
 .success-msg {
