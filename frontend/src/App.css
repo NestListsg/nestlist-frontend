@@ -13,9 +13,9 @@ html, body, #root { background: #0E2820 !important; min-height: 100vh; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { height: 100%; }
 body { font-family: 'Montserrat', sans-serif; background: var(--green-main); color: var(--cream); }
-/* — APP LAYOUT — */
+/* â€” APP LAYOUT â€” */
 .app-wrap { display: flex; height: 100vh; overflow: hidden; }
-/* — SIDEBAR — */
+/* â€” SIDEBAR â€” */
 .sidebar {
     width: 280px; min-width: 280px;
     background: var(--green-dark);
@@ -106,12 +106,12 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
     background: rgba(0,0,0,0.5);
     z-index: 99;
 }
-/* — MAIN — */
+/* â€” MAIN â€” */
 .main {
     flex: 1; display: flex; flex-direction: column;
     background: var(--green-main); height: 100vh; overflow-y: auto;
 }
-/* — HEADER — */
+/* â€” HEADER â€” */
 .nl-header {
     background: var(--green-dark); padding: 18px 28px;
     display: flex; justify-content: space-between; align-items: center;
@@ -144,13 +144,13 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
     font-family: 'Cormorant Garamond', serif; font-weight: 500;
 }
 .nl-agent-name { color: rgba(248,244,236,0.8); font-size: 15px; letter-spacing: 0.04em; font-family: 'Cormorant Garamond', serif; font-weight: 600; }
-/* — ACCENT LINE — */
+/* â€” ACCENT LINE â€” */
 .nl-accent {
     height: 1px; flex-shrink: 0;
     background: linear-gradient(to right, transparent 0%, #D4AF37 25%, #D4AF37 75%, transparent 100%);
     opacity: 0.6;
 }
-/* — WELCOME BAR — */
+/* â€” WELCOME BAR â€” */
 .nl-welcome {
     background: var(--green-mid); padding: 15px 28px;
     display: flex; justify-content: space-between; align-items: center;
@@ -164,14 +164,14 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
     letter-spacing: 0.2em; text-transform: uppercase; font-weight: 500;
     white-space: nowrap;
 }
-/* — CONTENT — */
+/* â€” CONTENT â€” */
 .nl-content { padding: 24px 28px; flex: 1; display: flex; flex-direction: column; }
 .section-label {
     font-size: 11px; letter-spacing: 0.25em;
     text-transform: uppercase; color: var(--gold-light);
     margin-bottom: 16px; font-weight: 500;
 }
-/* — STATS — */
+/* â€” STATS â€” */
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
 .stat {
     background: rgba(255,255,255,0.06);
@@ -187,7 +187,7 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
     font-size: 10px; letter-spacing: 0.18em;
     text-transform: uppercase; color: var(--gold-light); margin-top: 6px;
 }
-/* — PANELS — */
+/* â€” PANELS â€” */
 .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
 .panel {
     background: rgba(255,255,255,0.05);
@@ -220,11 +220,11 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
     font-weight: 500; transition: all 0.15s ease;
 }
 .btn-gold:hover { background: rgba(212,175,55,0.1); color: var(--cream); }
-/* — BOTTOM ROW — */
+/* â€” BOTTOM ROW â€” */
 .bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; flex: 1; min-height: 220px; }
 .hero-panel {
     border-radius: 4px; overflow: hidden; position: relative;
-    background-image: url('/hero.webp');
+    background-image: url('./hero.webp');
     background-size: cover; background-position: center top;
     display: flex; flex-direction: column; justify-content: flex-end; padding: 24px;
 }
@@ -276,7 +276,7 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
     font-size: 8px; color: rgba(212,175,55,0.4);
     margin-top: 6px; letter-spacing: 0.05em;
 }
-/* — LOGIN PAGE — */
+/* â€” LOGIN PAGE â€” */
 .login-page {
     min-height: 100vh; background: var(--green-main);
     display: flex; align-items: center; justify-content: center;
@@ -299,7 +299,7 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
     transition: all 0.15s ease;
 }
 .login-tab.active { color: var(--gold); border-bottom: 2px solid var(--gold); }
-/* — FORM ELEMENTS — */
+/* â€” FORM ELEMENTS â€” */
 .form-group { margin-bottom: 16px; text-align: left; }
 .form-label {
     display: block; font-size: 11px; letter-spacing: 0.1em;
@@ -339,7 +339,7 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
     padding: 10px; background: rgba(255,107,107,0.1);
     border-radius: 3px; border-left: 3px solid #ff6b6b;
 }
-/* — PAGE CONTENT — */
+/* â€” PAGE CONTENT â€” */
 .page-content { padding: 28px; flex: 1; overflow-y: auto; }
 .page-title {
     font-family: 'Cormorant Garamond', serif;
@@ -348,7 +348,7 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
     margin-bottom: 8px;
 }
 .page-subtitle { font-size: 13px; color: var(--cream-dim); margin-bottom: 24px; }
-/* — FORM GRID — */
+/* â€” FORM GRID â€” */
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
 .form-checkbox { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
 .form-checkbox input { margin-top: 2px; accent-color: var(--gold); }
@@ -362,7 +362,7 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
     resize: vertical; min-height: 80px; outline: none;
 }
 .form-textarea:focus { border-color: var(--gold); }
-/* — COMPLIANCE — */
+/* â€” COMPLIANCE â€” */
 .compliance-item {
     padding: 10px 14px; border-radius: 3px;
     margin-bottom: 8px; font-size: 13px;
@@ -370,7 +370,7 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
 .compliance-pass { background: rgba(212,175,55,0.1); border-left: 3px solid var(--gold); color: var(--cream); }
 .compliance-warn { background: rgba(255,165,0,0.1); border-left: 3px solid orange; color: var(--cream); }
 .compliance-fail { background: rgba(255,107,107,0.1); border-left: 3px solid #ff6b6b; color: var(--cream); }
-/* — LISTING OUTPUT — */
+/* â€” LISTING OUTPUT â€” */
 .listing-output {
     background: rgba(255,255,255,0.05);
     border: 0.5px solid rgba(212,175,55,0.25);
@@ -382,7 +382,7 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
     letter-spacing: 0.08em;
 }
 .listing-text { font-size: 14px; line-height: 1.8; color: var(--cream-dim); white-space: pre-wrap; }
-/* — MY LISTINGS — */
+/* â€” MY LISTINGS â€” */
 .listing-card {
     background: rgba(255,255,255,0.05);
     border: 0.5px solid rgba(212,175,55,0.25);
@@ -395,13 +395,13 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
 .listing-card-title { font-size: 15px; color: var(--cream); letter-spacing: 0.03em; }
 .listing-card-date { font-size: 11px; color: var(--cream-faint); }
 .listing-card-body { margin-top: 16px; font-size: 16px; line-height: 1.8; color: var(--cream-dim); white-space: pre-wrap; }
-/* — SUCCESS — */
+/* â€” SUCCESS â€” */
 .success-msg {
     color: var(--gold); font-size: 13px; margin-top: 12px;
     padding: 12px; background: rgba(212,175,55,0.1);
     border-radius: 3px; border-left: 3px solid var(--gold);
 }
-/* — SPINNER — */
+/* â€” SPINNER â€” */
 .spinner {
     display: inline-block; width: 20px; height: 20px;
     border: 2px solid rgba(212,175,55,0.3);
@@ -409,7 +409,7 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
     animation: spin 0.8s linear infinite; margin-right: 8px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-/* — DIVIDER — */
+/* â€” DIVIDER â€” */
 .divider { height: 0.5px; background: rgba(212,175,55,0.2); margin: 20px 0; }
 /* ================================
    MOBILE RESPONSIVE
@@ -469,21 +469,21 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
     /* Content padding */
     .nl-content { padding: 16px; }
     .page-content { padding: 16px; }
-    /* Stats — 2 columns on mobile */
+    /* Stats â€” 2 columns on mobile */
     .stats {
         grid-template-columns: repeat(2, 1fr);
         gap: 8px;
     }
     .stat-num { font-size: 36px; }
-    /* Panels — single column */
+    /* Panels â€” single column */
     .panels {
         grid-template-columns: 1fr;
     }
-    /* Bottom row — single column */
+    /* Bottom row â€” single column */
     .bottom-row {
         grid-template-columns: 1fr;
     }
-    /* Form grid — single column */
+    /* Form grid â€” single column */
     .form-grid {
         grid-template-columns: 1fr;
     }
