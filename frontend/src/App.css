@@ -34,7 +34,7 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
     border-bottom: 1px solid rgba(212,175,55,0.25);
     text-align: center;
 }
-.sb-logo img { display: block; margin: 0 auto 8px; width: 160px; }
+.sb-logo img { display: block; margin: 0 auto 8px; width: 160px; filter: brightness(1.15) contrast(1.1) saturate(1.2); }
 .sb-tagline {
     font-size: 9px; letter-spacing: 0.16em;
     text-transform: uppercase; color: var(--gold-light);
