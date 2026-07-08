@@ -9,7 +9,7 @@ import Enquiries from './pages/Enquiries';
 import MyProfile from './pages/MyProfile';
 import Billing from './pages/Billing';
 
-const LOGO = '/logo.png';
+const LOGO = '/logo_2.png';
 
 function Sidebar({ page, setPage, agent, onLogout, isOpen, onClose }) {
   const navItems = ['Dashboard', 'New Listing', 'My Listings', 'Enquiries', 'My Profile', 'Billing'];
