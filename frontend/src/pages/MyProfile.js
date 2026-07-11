@@ -13,6 +13,9 @@ export default function MyProfile({ agent, token, onUpdate }) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [telegramConnected, setTelegramConnected] = useState(!!agent.telegram_chat_id);
+  const [connecting, setConnecting] = useState(false);
+  const [pollError, setPollError] = useState('');
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -33,6 +36,48 @@ export default function MyProfile({ agent, token, onUpdate }) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const pollProfile = async () => {
+    try {
+      const res = await fetch(`${API}/api/profile`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.telegram_chat_id) {
+        setTelegramConnected(true);
+        onUpdate(data);
+        return true;
+      }
+    } catch (err) {
+      // ignore transient poll errors, keep trying
+    }
+    return false;
+  };
+
+  const handleConnectTelegram = async () => {
+    setConnecting(true); setPollError('');
+    try {
+      const res = await fetch(`${API}/api/profile/telegram-connect-link`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Could not get connect link');
+      window.open(data.link, '_blank');
+
+      let elapsed = 0;
+      const interval = setInterval(async () => {
+        elapsed += 3000;
+        const done = await pollProfile();
+        if (done || elapsed >= 30000) {
+          clearInterval(interval);
+          setConnecting(false);
+        }
+      }, 3000);
+    } catch (err) {
+      setPollError(err.message);
+      setConnecting(false);
     }
   };
 
@@ -85,6 +130,37 @@ export default function MyProfile({ agent, token, onUpdate }) {
         <div className="form-group">
           <label className="form-label">My Signature Phrase</label>
           <textarea className="form-textarea" value={form.signature} onChange={e => set('signature', e.target.value)} rows={3} />
+        </div>
+
+        <div className="divider" />
+        <div className="section-label">Notifications</div>
+        <div className="form-group">
+          {telegramConnected ? (
+            <div className="success-msg">Connected — new leads on your listings will be sent to your Telegram.</div>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="btn-gold"
+                style={{ maxWidth: '280px' }}
+                onClick={handleConnectTelegram}
+                disabled={connecting}
+              >
+                {connecting ? 'Waiting for Telegram...' : 'Connect Telegram'}
+              </button>
+              {connecting && (
+                <button
+                  type="button"
+                  className="btn-gold"
+                  style={{ maxWidth: '280px', marginTop: '8px' }}
+                  onClick={pollProfile}
+                >
+                  I've connected — refresh status
+                </button>
+              )}
+              {pollError && <div className="error-msg">{pollError}</div>}
+            </>
+          )}
         </div>
 
         {error && <div className="error-msg">{error}</div>}
