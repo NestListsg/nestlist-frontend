@@ -199,8 +199,6 @@ const STYLES = [
 export default function MyListings({ agent, token }) {
   const [listings, setListings] = useState([]);
   const [expanded, setExpanded] = useState(null);
-  const [fbResults, setFbResults] = useState({});
-  const [fbLoading, setFbLoading] = useState({});
   const [activePlatform, setActivePlatform] = useState({});
   const [captionStyle, setCaptionStyle] = useState({});
   const [copied, setCopied] = useState({});
@@ -216,23 +214,6 @@ export default function MyListings({ agent, token }) {
       .then(data => setListings(Array.isArray(data) ? data : []))
       .catch(() => setListings([]));
   }, [token]);
-
-  const postToFacebook = async (id) => {
-    setFbLoading(l => ({ ...l, [id]: true }));
-    try {
-      const res = await fetch(`${API}/api/listings/${id}/post-facebook`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Failed');
-      setFbResults(r => ({ ...r, [id]: `Posted! Post ID: ${data.post_id}` }));
-    } catch (err) {
-      setFbResults(r => ({ ...r, [id]: `Failed: ${err.message}` }));
-    } finally {
-      setFbLoading(l => ({ ...l, [id]: false }));
-    }
-  };
 
   const handleCopy = (listingId, platform, text) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -389,26 +370,6 @@ export default function MyListings({ agent, token }) {
               )}
 
               <div className="listing-card-body">{(l.content || '').replace(/\*\*/g, '').replace(/^#+\s/gm, '').replace(/---/g, '').trim()}</div>
-
-              <div style={{ padding: '0 20px 8px', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                <button
-                  className="btn-gold"
-                  style={{ maxWidth: '260px' }}
-                  onClick={() => postToFacebook(l.id)}
-                  disabled={fbLoading[l.id]}
-                >
-                  {fbLoading[l.id] ? 'Posting...' : '📘 Auto-Post to NestList Facebook'}
-                </button>
-              </div>
-
-              {fbResults[l.id] && (
-                <div
-                  className={fbResults[l.id].startsWith('Posted') ? 'success-msg' : 'error-msg'}
-                  style={{ margin: '0 20px 8px' }}
-                >
-                  {fbResults[l.id]}
-                </div>
-              )}
 
               <div style={{
                 margin: '8px 20px 20px',
