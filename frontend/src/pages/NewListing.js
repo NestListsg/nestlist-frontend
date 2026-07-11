@@ -23,8 +23,6 @@ export default function NewListing({ agent, token }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
-  const [fbLoading, setFbLoading] = useState(false);
-  const [fbResult, setFbResult] = useState('');
   const [imageLoading, setImageLoading] = useState(false);
   const [imagePreviews, setImagePreviews] = useState([]);
   const [imageSuccess, setImageSuccess] = useState('');
@@ -182,23 +180,6 @@ export default function NewListing({ agent, token }) {
       setError(err.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const postToFacebook = async () => {
-    setFbLoading(true); setFbResult('');
-    try {
-      const res = await fetch(`${API}/api/listings/${result.listing.id}/post-facebook`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Post failed');
-      setFbResult(`Posted to Facebook! Post ID: ${data.post_id}`);
-    } catch (err) {
-      setFbResult(`Failed: ${err.message}`);
-    } finally {
-      setFbLoading(false);
     }
   };
 
@@ -441,17 +422,6 @@ export default function NewListing({ agent, token }) {
                       </button>
                     </div>
                   ))}
-                </div>
-              )}
-
-              <div className="divider" />
-              <div className="section-label">Step 4 - Post to Facebook</div>
-              <button className="btn-gold" style={{ maxWidth: '320px' }} onClick={postToFacebook} disabled={fbLoading}>
-                {fbLoading ? <><span className="spinner" />Posting...</> : 'Post to NestList Facebook Page'}
-              </button>
-              {fbResult && (
-                <div className={fbResult.startsWith('Posted') ? 'success-msg' : 'error-msg'} style={{ marginTop: '12px' }}>
-                  {fbResult}
                 </div>
               )}
             </>
