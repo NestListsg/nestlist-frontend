@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 const API = process.env.REACT_APP_API_URL || '';
 
 function generateCaption(listing, platform, style) {
+  const listingUrl = `nestlist.sg/l/${listing.id}`;
   const cleanContent = (listing.content || '')
     .replace(/^---/gm, '')
     .replace(/\*\*/g, '')
@@ -23,7 +24,7 @@ function generateCaption(listing, platform, style) {
 
 ${bullets}
 
-Interested? Visit nestlist.sg or drop us a message.
+Interested? Visit ${listingUrl} or drop us a message.
 
 #NestList #NestListPrestige #SingaporeProperty #GCB #LandedProperty #PropertySG #RealEstate #Singapore #LuxuryProperty`,
 
@@ -33,7 +34,7 @@ Interested? Visit nestlist.sg or drop us a message.
 
 ${bullets}
 
-DM me or visit nestlist.sg 🏡
+DM me or visit ${listingUrl} 🏡
 
 #NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #PropertyForSale`,
 
@@ -44,7 +45,7 @@ DM me or visit nestlist.sg 🏡
 Key details:
 ${bullets}
 
-Available for private viewing. Connect with me or visit nestlist.sg.
+Available for private viewing. Connect with me or visit ${listingUrl}.
 
 #SingaporeRealEstate #LuxuryProperty #GCB #PropertyInvestment #SingaporeProperty #NestList`,
 
@@ -56,7 +57,7 @@ Available for private viewing. Connect with me or visit nestlist.sg.
 
 ${bullets}
 
-Reply to arrange a private viewing or visit nestlist.sg. Thank you! 🙏`
+Reply to arrange a private viewing or visit ${listingUrl}. Thank you! 🙏`
   };
 
   const long = {
@@ -66,7 +67,7 @@ Reply to arrange a private viewing or visit nestlist.sg. Thank you! 🙏`
 
 ${body}...
 
-Interested? Visit nestlist.sg or drop us a message.
+Interested? Visit ${listingUrl} or drop us a message.
 
 #NestList #NestListPrestige #SingaporeProperty #GCB #LandedProperty #PropertySG #RealEstate #Singapore #LuxuryProperty #HomeSweetHome`,
 
@@ -77,7 +78,7 @@ Interested? Visit nestlist.sg or drop us a message.
 
 ${shortBody}...
 
-DM me or visit nestlist.sg to find out more 🏡
+DM me or visit ${listingUrl} to find out more 🏡
 
 #NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #SingaporeLife #PropertyInvestment #LandedHouse #Bungalow #PenthouseLiving #PropertyForSale`,
 
@@ -90,7 +91,7 @@ ${listing.content?.slice(0, 600) || ''}...
 
 This is a rare opportunity in one of Singapore's most sought-after addresses. Whether you are an investor or an owner-occupier seeking the finest in Singapore living, I would welcome a private conversation.
 
-Reach me at nestlist.sg or reply directly to this post.
+Reach me at ${listingUrl} or reply directly to this post.
 
 #SingaporeRealEstate #LuxuryProperty #GCB #PropertyInvestment #SingaporeProperty #RealEstate #LandedProperty #HighNetWorth #PropertySG #NestList`,
 
@@ -102,7 +103,7 @@ Reach me at nestlist.sg or reply directly to this post.
 
 ${listing.content?.slice(0, 400) || ''}...
 
-For more details and to arrange a private viewing, please reply to this message or visit nestlist.sg.
+For more details and to arrange a private viewing, please reply to this message or visit ${listingUrl}.
 
 Thank you! 🙏`
   };
@@ -118,7 +119,7 @@ ${bullets}
 📖 THE FULL STORY
 ${body}...
 
-Interested? Visit nestlist.sg or drop us a message.
+Interested? Visit ${listingUrl} or drop us a message.
 
 #NestList #NestListPrestige #SingaporeProperty #GCB #LandedProperty #PropertySG #RealEstate #Singapore #LuxuryProperty #HomeSweetHome`,
 
@@ -132,7 +133,7 @@ ${bullets}
 📖 THE STORY
 ${shortBody}...
 
-DM me or visit nestlist.sg 🏡
+DM me or visit ${listingUrl} 🏡
 
 #NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #PropertyForSale`,
 
@@ -146,7 +147,7 @@ ${bullets}
 📖 THE FULL STORY
 ${listing.content?.slice(0, 600) || ''}...
 
-Available for private viewing. Reach me at nestlist.sg or reply directly.
+Available for private viewing. Reach me at ${listingUrl} or reply directly.
 
 #SingaporeRealEstate #LuxuryProperty #GCB #PropertyInvestment #SingaporeProperty #RealEstate #LandedProperty #HighNetWorth #PropertySG #NestList`,
 
@@ -162,7 +163,7 @@ ${bullets}
 📖 THE FULL STORY
 ${listing.content?.slice(0, 400) || ''}...
 
-Reply to arrange a private viewing or visit nestlist.sg. Thank you! 🙏`
+Reply to arrange a private viewing or visit ${listingUrl}. Thank you! 🙏`
   };
 
   const tiktok = {
@@ -289,7 +290,7 @@ export default function MyListings({ agent, token }) {
       await navigator.share({
         title: `${listing.property_type} | ${listing.location}`,
         text: caption,
-        url: 'https://nestlist.sg'
+        url: `https://nestlist.sg/l/${listing.id}`
       });
       setShareStatus(s => ({ ...s, [`${listing.id}-${platform}`]: 'Shared!' }));
       setTimeout(() => setShareStatus(s => ({ ...s, [`${listing.id}-${platform}`]: '' })), 2500);

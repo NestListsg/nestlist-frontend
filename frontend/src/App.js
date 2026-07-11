@@ -8,6 +8,7 @@ import MyListings from './pages/MyListings';
 import Enquiries from './pages/Enquiries';
 import MyProfile from './pages/MyProfile';
 import Billing from './pages/Billing';
+import PublicListing from './pages/PublicListing';
 
 const LOGO = '/logo_2.png';
 
@@ -68,7 +69,7 @@ function Header({ agent }) {
   );
 }
 
-function App() {
+function AuthenticatedApp() {
   const [token, setToken] = useState(localStorage.getItem('nl_token'));
   const [agent, setAgent] = useState(JSON.parse(localStorage.getItem('nl_agent') || 'null'));
   const [page, setPage] = useState('Dashboard');
@@ -125,6 +126,17 @@ function App() {
         {renderPage()}
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/l/:listingId" element={<PublicListing />} />
+        <Route path="*" element={<AuthenticatedApp />} />
+      </Routes>
+    </Router>
   );
 }
 

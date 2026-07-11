@@ -81,6 +81,10 @@ export default function Enquiries({ agent, token }) {
   };
 
   const statusColor = (s) => s === 'Active' ? '#4CAF50' : 'rgba(248,244,236,0.4)';
+  const scoreColor = (s) => s === 'Hot' ? '#ff6b6b' : s === 'Warm' ? '#F0C84A' : s === 'Cold' ? 'rgba(248,244,236,0.4)' : null;
+  const scoreEmoji = (s) => s === 'Hot' ? '🔥' : s === 'Warm' ? '🌤️' : s === 'Cold' ? '❄️' : '';
+  const scoreRank = (s) => s === 'Hot' ? 0 : s === 'Warm' ? 1 : s === 'Cold' ? 2 : 3;
+  const sortedEnquiries = [...enquiries].sort((a, b) => scoreRank(a.lead_score) - scoreRank(b.lead_score));
 
   return (
     <div className="page-content">
@@ -164,11 +168,16 @@ export default function Enquiries({ agent, token }) {
         </div>
       )}
 
-      {enquiries.map(enq => (
+      {sortedEnquiries.map(enq => (
         <div key={enq.id} className="listing-card">
           <div className="listing-card-header" onClick={() => setExpanded(expanded === enq.id ? null : enq.id)}>
             <div className="listing-card-title">
               {enq.client_name}
+              {enq.lead_score && (
+                <span style={{marginLeft:'10px', fontSize:'11px', color:scoreColor(enq.lead_score), fontWeight:'bold'}}>
+                  {scoreEmoji(enq.lead_score)} {enq.lead_score}
+                </span>
+              )}
               <span style={{marginLeft:'10px', fontSize:'11px', color:statusColor(enq.status), fontWeight:'normal'}}>
                 {enq.status}
               </span>
@@ -180,6 +189,16 @@ export default function Enquiries({ agent, token }) {
           </div>
           {expanded === enq.id && (
             <div style={{padding:'16px 20px'}}>
+              {enq.source === 'Public Listing Page' && (
+                <div style={{marginBottom:'10px', fontSize:'11px', color:'var(--gold-light)', letterSpacing:'0.05em'}}>
+                  📍 From Public Listing
+                </div>
+              )}
+              {enq.ai_summary && (
+                <div style={{marginBottom:'12px', fontSize:'13px', background:'rgba(212,175,55,0.08)', padding:'10px 12px', borderRadius:'3px', borderLeft:'3px solid var(--gold)'}}>
+                  <span style={{color:'rgba(248,244,236,0.5)'}}>AI Summary: </span>{enq.ai_summary}
+                </div>
+              )}
               {enq.phone && <div style={{marginBottom:'8px', fontSize:'13px'}}><span style={{color:'rgba(248,244,236,0.5)'}}>Phone: </span>{enq.phone}</div>}
               {enq.email && <div style={{marginBottom:'8px', fontSize:'13px'}}><span style={{color:'rgba(248,244,236,0.5)'}}>Email: </span>{enq.email}</div>}
               {enq.budget && <div style={{marginBottom:'8px', fontSize:'13px'}}><span style={{color:'rgba(248,244,236,0.5)'}}>Budget: </span>SGD {enq.budget}</div>}
