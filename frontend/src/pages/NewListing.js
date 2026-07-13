@@ -424,6 +424,11 @@ export default function NewListing({ agent, token }) {
                   ))}
                 </div>
               )}
+
+              <div className="divider" />
+              <div className="success-msg">
+                Your listing is complete! Head to <strong>My Listings</strong> in the sidebar to view it and share it on social media.
+              </div>
             </>
           )}
         </>
