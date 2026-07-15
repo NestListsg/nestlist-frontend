@@ -16,6 +16,9 @@ export default function MyProfile({ agent, token, onUpdate }) {
   const [telegramConnected, setTelegramConnected] = useState(!!agent.telegram_chat_id);
   const [connecting, setConnecting] = useState(false);
   const [pollError, setPollError] = useState('');
+  const [photoUrl, setPhotoUrl] = useState(agent.photo_url || '');
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState('');
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -81,6 +84,33 @@ export default function MyProfile({ agent, token, onUpdate }) {
     }
   };
 
+  const handlePhotoSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setPhotoUploading(true); setPhotoError('');
+    try {
+      const image_data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch(`${API}/api/profile/photo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ image_data })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Upload failed');
+      setPhotoUrl(data.photo_url);
+      onUpdate({ ...agent, photo_url: data.photo_url });
+    } catch (err) {
+      setPhotoError(err.message);
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
   const toneOptions = ['Warm & Conversational', 'Formal & Professional', 'Bold & Punchy'];
   const emphasisOptions = ['Family Living & Emotional Comfort', 'Investment Returns & Capital Appreciation', 'Lifestyle & Prestige', 'Architecture & Design'];
 
@@ -89,6 +119,36 @@ export default function MyProfile({ agent, token, onUpdate }) {
       <div className="page-title">My Profile & Style Settings</div>
       <form onSubmit={handleSave}>
         <div className="section-label">Agent Details</div>
+
+        <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {photoUrl ? (
+            <img
+              src={photoUrl}
+              alt="Profile"
+              style={{ width: '72px', height: '72px', borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(212,175,55,0.4)' }}
+            />
+          ) : (
+            <div style={{
+              width: '72px', height: '72px', borderRadius: '50%',
+              background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '11px', color: 'rgba(248,244,236,0.4)', textAlign: 'center'
+            }}>
+              No photo
+            </div>
+          )}
+          <div>
+            <label className="btn-gold" style={{ maxWidth: '200px', display: 'inline-block', cursor: 'pointer', textAlign: 'center' }}>
+              {photoUploading ? 'Uploading...' : photoUrl ? 'Change Photo' : 'Upload Headshot'}
+              <input type="file" accept="image/*" onChange={handlePhotoSelect} disabled={photoUploading} style={{ display: 'none' }} />
+            </label>
+            <div style={{ fontSize: '11px', color: 'rgba(248,244,236,0.4)', marginTop: '6px' }}>
+              Used on your branded listing posters.
+            </div>
+            {photoError && <div className="error-msg">{photoError}</div>}
+          </div>
+        </div>
+
         <div className="form-grid">
           <div>
             <div className="form-group">
@@ -136,7 +196,7 @@ export default function MyProfile({ agent, token, onUpdate }) {
         <div className="section-label">Notifications</div>
         <div className="form-group">
           {telegramConnected ? (
-            <div className="success-msg">Connected — new leads on your listings will be sent to your Telegram.</div>
+            <div className="success-msg">Connected ‚Äî new leads on your listings will be sent to your Telegram.</div>
           ) : (
             <>
               <button
@@ -155,7 +215,7 @@ export default function MyProfile({ agent, token, onUpdate }) {
                   style={{ maxWidth: '280px', marginTop: '8px' }}
                   onClick={pollProfile}
                 >
-                  I've connected — refresh status
+                  I've connected ‚Äî refresh status
                 </button>
               )}
               {pollError && <div className="error-msg">{pollError}</div>}
