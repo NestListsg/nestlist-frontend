@@ -13,14 +13,14 @@ function generateCaption(listing, platform, style) {
   const body = cleanContent.slice(0, 800);
   const shortBody = cleanContent.slice(0, 300);
 
-  const bullets = `• ${listing.land_size ? listing.land_size.toLocaleString() + ' sqft land' : 'Land on request'}
-• ${listing.built_up ? listing.built_up.toLocaleString() + ' sqft built-up' : 'Built-up on request'}
-• ${listing.bedrooms || 'Bedrooms on request'}
-• ${listing.features || 'Premium features throughout'}`;
+  const bullets = `‚Ä¢ ${listing.land_size ? listing.land_size.toLocaleString() + ' sqft land' : 'Land on request'}
+‚Ä¢ ${listing.built_up ? listing.built_up.toLocaleString() + ' sqft built-up' : 'Built-up on request'}
+‚Ä¢ ${listing.bedrooms || 'Bedrooms on request'}
+‚Ä¢ ${listing.features || 'Premium features throughout'}`;
 
   const tldr = {
-    facebook: `🏡 ${listing.property_type} | ${listing.location}
-💰 SGD ${listing.price}
+    facebook: `üè° ${listing.property_type} | ${listing.location}
+üí∞ SGD ${listing.price}
 
 ${bullets}
 
@@ -28,19 +28,19 @@ Interested? Visit ${listingUrl} or drop us a message.
 
 #NestList #NestListPrestige #SingaporeProperty #GCB #LandedProperty #PropertySG #RealEstate #Singapore #LuxuryProperty`,
 
-    instagram: `🏡 ${listing.property_type}
-📍 ${listing.location}
-💰 SGD ${listing.price}
+    instagram: `üè° ${listing.property_type}
+üìç ${listing.location}
+üí∞ SGD ${listing.price}
 
 ${bullets}
 
-DM me or visit ${listingUrl} 🏡
+DM me or visit ${listingUrl} üè°
 
 #NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #PropertyForSale`,
 
-    linkedin: `🏡 New Listing | ${listing.property_type}
-📍 ${listing.location}
-💰 SGD ${listing.price}
+    linkedin: `üè° New Listing | ${listing.property_type}
+üìç ${listing.location}
+üí∞ SGD ${listing.price}
 
 Key details:
 ${bullets}
@@ -51,19 +51,19 @@ Available for private viewing. Connect with me or visit ${listingUrl}.
 
     whatsapp: `Hi! Quick summary of a new listing:
 
-🏡 *${listing.property_type}*
-📍 ${listing.location}
-💰 SGD ${listing.price}
+üè° *${listing.property_type}*
+üìç ${listing.location}
+üí∞ SGD ${listing.price}
 
 ${bullets}
 
-Reply to arrange a private viewing or visit ${listingUrl}. Thank you! 🙏`
+Reply to arrange a private viewing or visit ${listingUrl}. Thank you! üôè`
   };
 
   const long = {
-    facebook: `🏡 NEW LISTING | ${listing.property_type}
-📍 ${listing.location}
-💰 SGD ${listing.price}
+    facebook: `üè° NEW LISTING | ${listing.property_type}
+üìç ${listing.location}
+üí∞ SGD ${listing.price}
 
 ${body}...
 
@@ -71,21 +71,21 @@ Interested? Visit ${listingUrl} or drop us a message.
 
 #NestList #NestListPrestige #SingaporeProperty #GCB #LandedProperty #PropertySG #RealEstate #Singapore #LuxuryProperty #HomeSweetHome`,
 
-    instagram: `✨ ${listing.property_type} for sale ✨
+    instagram: `‚ú® ${listing.property_type} for sale ‚ú®
 
-📍 ${listing.location}
-💰 SGD ${listing.price}
+üìç ${listing.location}
+üí∞ SGD ${listing.price}
 
 ${shortBody}...
 
-DM me or visit ${listingUrl} to find out more 🏡
+DM me or visit ${listingUrl} to find out more üè°
 
 #NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #SingaporeLife #PropertyInvestment #LandedHouse #Bungalow #PenthouseLiving #PropertyForSale`,
 
-    linkedin: `🏡 New Property Listing | ${listing.property_type}
+    linkedin: `üè° New Property Listing | ${listing.property_type}
 
-📍 Location: ${listing.location}
-💰 Asking Price: SGD ${listing.price}
+üìç Location: ${listing.location}
+üí∞ Asking Price: SGD ${listing.price}
 
 ${listing.content?.slice(0, 600) || ''}...
 
@@ -97,54 +97,54 @@ Reach me at ${listingUrl} or reply directly to this post.
 
     whatsapp: `Hi! I have a new property listing that may interest you.
 
-🏡 *${listing.property_type}*
-📍 ${listing.location}
-💰 SGD ${listing.price}
+üè° *${listing.property_type}*
+üìç ${listing.location}
+üí∞ SGD ${listing.price}
 
 ${listing.content?.slice(0, 400) || ''}...
 
 For more details and to arrange a private viewing, please reply to this message or visit ${listingUrl}.
 
-Thank you! 🙏`
+Thank you! üôè`
   };
 
   const combined = {
-    facebook: `🏡 NEW LISTING | ${listing.property_type}
-📍 ${listing.location}
-💰 SGD ${listing.price}
+    facebook: `üè° NEW LISTING | ${listing.property_type}
+üìç ${listing.location}
+üí∞ SGD ${listing.price}
 
-⚡ AT A GLANCE
+‚ö° AT A GLANCE
 ${bullets}
 
-📖 THE FULL STORY
+üìñ THE FULL STORY
 ${body}...
 
 Interested? Visit ${listingUrl} or drop us a message.
 
 #NestList #NestListPrestige #SingaporeProperty #GCB #LandedProperty #PropertySG #RealEstate #Singapore #LuxuryProperty #HomeSweetHome`,
 
-    instagram: `🏡 ${listing.property_type}
-📍 ${listing.location}
-💰 SGD ${listing.price}
+    instagram: `üè° ${listing.property_type}
+üìç ${listing.location}
+üí∞ SGD ${listing.price}
 
-⚡ AT A GLANCE
+‚ö° AT A GLANCE
 ${bullets}
 
-📖 THE STORY
+üìñ THE STORY
 ${shortBody}...
 
-DM me or visit ${listingUrl} 🏡
+DM me or visit ${listingUrl} üè°
 
 #NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #PropertyForSale`,
 
-    linkedin: `🏡 New Property Listing | ${listing.property_type}
-📍 ${listing.location}
-💰 SGD ${listing.price}
+    linkedin: `üè° New Property Listing | ${listing.property_type}
+üìç ${listing.location}
+üí∞ SGD ${listing.price}
 
-⚡ AT A GLANCE
+‚ö° AT A GLANCE
 ${bullets}
 
-📖 THE FULL STORY
+üìñ THE FULL STORY
 ${listing.content?.slice(0, 600) || ''}...
 
 Available for private viewing. Reach me at ${listingUrl} or reply directly.
@@ -153,25 +153,25 @@ Available for private viewing. Reach me at ${listingUrl} or reply directly.
 
     whatsapp: `Hi! I have a new property listing that may interest you.
 
-🏡 *${listing.property_type}*
-📍 ${listing.location}
-💰 SGD ${listing.price}
+üè° *${listing.property_type}*
+üìç ${listing.location}
+üí∞ SGD ${listing.price}
 
-⚡ AT A GLANCE
+‚ö° AT A GLANCE
 ${bullets}
 
-📖 THE FULL STORY
+üìñ THE FULL STORY
 ${listing.content?.slice(0, 400) || ''}...
 
-Reply to arrange a private viewing or visit ${listingUrl}. Thank you! 🙏`
+Reply to arrange a private viewing or visit ${listingUrl}. Thank you! üôè`
   };
 
   const tiktok = {
-    tiktok: `${listing.property_type} in ${listing.location} 🏡
+    tiktok: `${listing.property_type} in ${listing.location} üè°
 SGD ${listing.price}
 ${listing.land_size ? listing.land_size.toLocaleString() + ' sqft' : ''} | ${listing.bedrooms || ''}
-Upload your property video and use this caption 👆
-DM to arrange viewing 🔑
+Upload your property video and use this caption üëÜ
+DM to arrange viewing üîë
 
 #SingaporeProperty #PropertySG #LandedSG #RealEstateSG #SGProperty`
   };
@@ -183,17 +183,17 @@ DM to arrange viewing 🔑
 }
 
 const PLATFORMS = [
-  { key: 'facebook', label: 'Facebook', emoji: '📘', url: 'https://www.facebook.com' },
-  { key: 'instagram', label: 'Instagram', emoji: '📸', url: 'https://www.instagram.com' },
-  { key: 'linkedin', label: 'LinkedIn', emoji: '💼', url: 'https://www.linkedin.com/feed' },
-  { key: 'whatsapp', label: 'WhatsApp', emoji: '💬', url: 'https://web.whatsapp.com' },
-  { key: 'tiktok', label: 'TikTok', emoji: '🎵', url: 'https://www.tiktok.com/upload' },
+  { key: 'facebook', label: 'Facebook', emoji: 'üìò', url: 'https://www.facebook.com' },
+  { key: 'instagram', label: 'Instagram', emoji: 'üì∏', url: 'https://www.instagram.com' },
+  { key: 'linkedin', label: 'LinkedIn', emoji: 'üíº', url: 'https://www.linkedin.com/feed' },
+  { key: 'whatsapp', label: 'WhatsApp', emoji: 'üí¨', url: 'https://web.whatsapp.com' },
+  { key: 'tiktok', label: 'TikTok', emoji: 'üéµ', url: 'https://www.tiktok.com/upload' },
 ];
 
 const STYLES = [
-  { key: 'long', label: '📖 Full Story' },
-  { key: 'tldr', label: '⚡ Quick Summary' },
-  { key: 'combined', label: '📖⚡ Both' },
+  { key: 'long', label: 'üìñ Full Story' },
+  { key: 'tldr', label: '‚ö° Quick Summary' },
+  { key: 'combined', label: 'üìñ‚ö° Both' },
 ];
 
 export default function MyListings({ agent, token }) {
@@ -205,6 +205,8 @@ export default function MyListings({ agent, token }) {
   const [deleting, setDeleting] = useState({});
   const [downloading, setDownloading] = useState({});
   const [shareStatus, setShareStatus] = useState({});
+  const [posterLoading, setPosterLoading] = useState({});
+  const [posterError, setPosterError] = useState({});
 
   useEffect(() => {
     fetch(`${API}/api/listings`, {
@@ -282,6 +284,24 @@ export default function MyListings({ agent, token }) {
     }
   };
 
+  const handleGeneratePoster = async (listing) => {
+    setPosterLoading(p => ({ ...p, [listing.id]: true }));
+    setPosterError(e => ({ ...e, [listing.id]: '' }));
+    try {
+      const res = await fetch(`${API}/api/listings/${listing.id}/generate-poster`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to generate poster');
+      setListings(prev => prev.map(l => l.id === listing.id ? { ...l, poster_url: data.poster_url } : l));
+    } catch (err) {
+      setPosterError(e => ({ ...e, [listing.id]: err.message }));
+    } finally {
+      setPosterLoading(p => ({ ...p, [listing.id]: false }));
+    }
+  };
+
   const getActivePlatform = (listingId) => activePlatform[listingId] || 'facebook';
   const getCaptionStyle = (listingId) => captionStyle[listingId] || 'long';
   const canWebShare = !!navigator.share;
@@ -297,7 +317,7 @@ export default function MyListings({ agent, token }) {
       {listings.map(l => (
         <div key={l.id} className="listing-card">
           <div className="listing-card-header" onClick={() => setExpanded(expanded === l.id ? null : l.id)}>
-            <div className="listing-card-title">{l.property_type} — {l.location} — SGD {l.price}</div>
+            <div className="listing-card-title">{l.property_type} ‚Äî {l.location} ‚Äî SGD {l.price}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <button
                 onClick={(e) => { e.stopPropagation(); handleDelete(l.id); }}
@@ -313,9 +333,9 @@ export default function MyListings({ agent, token }) {
                   transition: 'opacity 0.2s'
                 }}
               >
-                🗑️
+                üóëÔ∏è
               </button>
-              <div className="listing-card-date">{l.created_at?.slice(0, 10)} {expanded === l.id ? '▲' : '▼'}</div>
+              <div className="listing-card-date">{l.created_at?.slice(0, 10)} {expanded === l.id ? '‚ñ≤' : '‚ñº'}</div>
             </div>
           </div>
 
@@ -343,7 +363,7 @@ export default function MyListings({ agent, token }) {
                             textDecoration: 'none'
                           }}
                         >
-                          ⬇ Save
+                          ‚¨á Save
                         </a>
                       </div>
                     ))}
@@ -364,7 +384,7 @@ export default function MyListings({ agent, token }) {
                       marginBottom: '4px'
                     }}
                   >
-                    {downloading[l.id] ? 'Preparing ZIP...' : `⬇ Download All ${l.images.length} Photos as ZIP`}
+                    {downloading[l.id] ? 'Preparing ZIP...' : `‚¨á Download All ${l.images.length} Photos as ZIP`}
                   </button>
                 </div>
               )}
@@ -378,9 +398,61 @@ export default function MyListings({ agent, token }) {
                 borderRadius: '4px',
                 padding: '16px'
               }}>
-                <div className="section-label" style={{ marginBottom: '4px' }}>📲 Share This Listing</div>
+                <div className="section-label" style={{ marginBottom: '4px' }}>üì≤ Share This Listing</div>
                 <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '14px' }}>
                   Select a platform and caption style. Copy and paste directly into your own account.
+                </div>
+
+                <div style={{
+                  marginBottom: '16px',
+                  paddingBottom: '16px',
+                  borderBottom: '1px solid rgba(212,175,55,0.15)'
+                }}>
+                  <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '10px' }}>
+                    Branded poster for your post/story
+                  </div>
+                  {l.poster_url && (
+                    <div style={{ marginBottom: '10px' }}>
+                      <img
+                        src={l.poster_url}
+                        alt="Branded poster"
+                        style={{ maxWidth: '220px', borderRadius: '4px', border: '1px solid rgba(212,175,55,0.3)', display: 'block' }}
+                      />
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <button
+                      className="btn-primary"
+                      style={{ maxWidth: '220px' }}
+                      onClick={() => handleGeneratePoster(l)}
+                      disabled={posterLoading[l.id]}
+                    >
+                      {posterLoading[l.id] ? 'Generating...' : l.poster_url ? 'üñºÔ∏è Regenerate Poster' : 'üñºÔ∏è Generate Poster'}
+                    </button>
+                    {l.poster_url && (
+                      <a
+                        href={l.poster_url}
+                        download
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid rgba(212,175,55,0.4)',
+                          color: '#F0C84A',
+                          padding: '10px 16px',
+                          borderRadius: '3px',
+                          fontSize: '12px',
+                          fontFamily: "'Montserrat', sans-serif",
+                          textDecoration: 'none'
+                        }}
+                      >
+                        ‚¨á Download
+                      </a>
+                    )}
+                  </div>
+                  {posterError[l.id] && (
+                    <div style={{ color: '#e08080', fontSize: '12px', marginTop: '8px' }}>{posterError[l.id]}</div>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
@@ -451,7 +523,7 @@ export default function MyListings({ agent, token }) {
                         style={{ maxWidth: '180px' }}
                         onClick={() => handleCopy(l.id, p.key, generateCaption(l, p.key, getCaptionStyle(l.id)))}
                       >
-                        {copied[`${l.id}-${p.key}`] ? '✅ Copied!' : '📋 Copy Caption'}
+                        {copied[`${l.id}-${p.key}`] ? '‚úÖ Copied!' : 'üìã Copy Caption'}
                       </button>
 
                       {canWebShare && (
@@ -468,7 +540,7 @@ export default function MyListings({ agent, token }) {
                             fontFamily: "'Montserrat', sans-serif"
                           }}
                         >
-                          {shareStatus[`${l.id}-${p.key}`] || '📤 Share'}
+                          {shareStatus[`${l.id}-${p.key}`] || 'üì§ Share'}
                         </button>
                       )}
 
