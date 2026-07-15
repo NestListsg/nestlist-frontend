@@ -5,7 +5,7 @@ const STORAGE_KEY = 'nestlist_new_listing_form';
 
 const DEFAULT_FORM = {
   property_type: 'Good Class Bungalow (GCB)', location: '', land_size: 0,
-  built_up: 0, bedrooms: '', price: '', features: '',
+  built_up: 0, bedrooms: '', bathrooms: '', price: '', features: '',
   plot_width: 0, plot_depth: 0, storeys: 0, site_coverage: 0,
   sg_citizen: true
 };
@@ -315,8 +315,12 @@ export default function NewListing({ agent, token }) {
               <input className="form-input" type="number" value={form.built_up} onChange={e => set('built_up', +e.target.value)} />
             </div>
             <div className="form-group">
-              <label className="form-label">7. Bedrooms and Bathrooms</label>
-              <input className="form-input" value={form.bedrooms} onChange={e => set('bedrooms', e.target.value)} placeholder="e.g. 4 bedrooms, 4 bathrooms" required />
+              <label className="form-label">7. Bedrooms</label>
+              <input className="form-input" value={form.bedrooms} onChange={e => set('bedrooms', e.target.value)} placeholder="e.g. 4" required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">7b. Bathrooms</label>
+              <input className="form-input" value={form.bathrooms} onChange={e => set('bathrooms', e.target.value)} placeholder="e.g. 4" />
             </div>
             <div className="form-group">
               <label className="form-label">8. Asking Price (SGD)</label>
@@ -418,7 +422,7 @@ export default function NewListing({ agent, token }) {
                           lineHeight: '1'
                         }}
                       >
-                        ×
+                        √ó
                       </button>
                     </div>
                   ))}
