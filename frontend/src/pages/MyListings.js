@@ -207,6 +207,8 @@ export default function MyListings({ agent, token }) {
   const [shareStatus, setShareStatus] = useState({});
   const [posterLoading, setPosterLoading] = useState({});
   const [posterError, setPosterError] = useState({});
+  const [posterPhotoIndex, setPosterPhotoIndex] = useState({});
+  const [deletingPhoto, setDeletingPhoto] = useState({});
 
   useEffect(() => {
     fetch(`${API}/api/listings`, {
@@ -288,7 +290,8 @@ export default function MyListings({ agent, token }) {
     setPosterLoading(p => ({ ...p, [listing.id]: true }));
     setPosterError(e => ({ ...e, [listing.id]: '' }));
     try {
-      const res = await fetch(`${API}/api/listings/${listing.id}/generate-poster`, {
+      const photoIndex = posterPhotoIndex[listing.id] || 0;
+      const res = await fetch(`${API}/api/listings/${listing.id}/generate-poster?photo_index=${photoIndex}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -299,6 +302,25 @@ export default function MyListings({ agent, token }) {
       setPosterError(e => ({ ...e, [listing.id]: err.message }));
     } finally {
       setPosterLoading(p => ({ ...p, [listing.id]: false }));
+    }
+  };
+
+  const handleDeletePhoto = async (listing, index) => {
+    if (!window.confirm('Remove this photo from the listing?')) return;
+    setDeletingPhoto(d => ({ ...d, [`${listing.id}-${index}`]: true }));
+    try {
+      const res = await fetch(`${API}/api/listings/${listing.id}/images/${index}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to delete photo');
+      setListings(prev => prev.map(l => l.id === listing.id ? { ...l, images: data.images } : l));
+      setPosterPhotoIndex(p => ({ ...p, [listing.id]: 0 }));
+    } catch (err) {
+      alert('Failed to delete photo.');
+    } finally {
+      setDeletingPhoto(d => ({ ...d, [`${listing.id}-${index}`]: false }));
     }
   };
 
@@ -344,29 +366,62 @@ export default function MyListings({ agent, token }) {
               {l.images && l.images.length > 0 && (
                 <div style={{ padding: '16px 20px 0' }}>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                    {l.images.map((url, i) => (
-                      <div key={i} style={{ position: 'relative' }}>
-                        <img
-                          src={url}
-                          alt={`Property ${i + 1}`}
-                          style={{ width: '150px', height: '110px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(212,175,55,0.3)' }}
-                        />
-                        <a
-                          href={url}
-                          download
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            position: 'absolute', bottom: '4px', right: '4px',
-                            background: 'rgba(0,0,0,0.6)', color: '#F0C84A',
-                            borderRadius: '3px', fontSize: '10px', padding: '2px 6px',
-                            textDecoration: 'none'
-                          }}
-                        >
-                          ⬇ Save
-                        </a>
-                      </div>
-                    ))}
+                    {l.images.map((url, i) => {
+                      const isPosterPhoto = (posterPhotoIndex[l.id] || 0) === i;
+                      return (
+                        <div key={i} style={{ position: 'relative' }}>
+                          <img
+                            src={url}
+                            alt={`Property ${i + 1}`}
+                            onClick={() => setPosterPhotoIndex(p => ({ ...p, [l.id]: i }))}
+                            style={{
+                              width: '150px', height: '110px', objectFit: 'cover', borderRadius: '4px',
+                              border: isPosterPhoto ? '2px solid #F0C84A' : '1px solid rgba(212,175,55,0.3)',
+                              cursor: 'pointer'
+                            }}
+                          />
+                          {isPosterPhoto && (
+                            <div style={{
+                              position: 'absolute', top: '4px', left: '4px',
+                              background: 'rgba(240,200,74,0.9)', color: '#1a1a2e',
+                              borderRadius: '3px', fontSize: '9px', padding: '2px 6px', fontWeight: 'bold'
+                            }}>
+                              ★ POSTER
+                            </div>
+                          )}
+                          <button
+                            onClick={() => handleDeletePhoto(l, i)}
+                            disabled={deletingPhoto[`${l.id}-${i}`]}
+                            title="Remove this photo"
+                            style={{
+                              position: 'absolute', top: '4px', right: '4px',
+                              background: 'rgba(0,0,0,0.7)', border: 'none',
+                              color: '#ff6b6b', borderRadius: '50%',
+                              width: '20px', height: '20px',
+                              cursor: 'pointer', fontSize: '12px',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              lineHeight: '1'
+                            }}
+                          >
+                            ×
+                          </button>
+                          <a
+                            href={url}
+                            download
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              position: 'absolute', bottom: '4px', right: '4px',
+                              background: 'rgba(0,0,0,0.6)', color: '#F0C84A',
+                              borderRadius: '3px', fontSize: '10px', padding: '2px 6px',
+                              textDecoration: 'none'
+                            }}
+                          >
+                            ⬇ Save
+                          </a>
+                        </div>
+                      );
+                    })}
                   </div>
                   <button
                     onClick={() => handleDownloadAll(l)}
@@ -409,7 +464,7 @@ export default function MyListings({ agent, token }) {
                   borderBottom: '1px solid rgba(212,175,55,0.15)'
                 }}>
                   <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '10px' }}>
-                    Branded poster for your post/story
+                    Branded poster for your post/story. Click a photo above (marked ★ POSTER) to choose the background.
                   </div>
                   {l.poster_url && (
                     <div style={{ marginBottom: '10px' }}>
