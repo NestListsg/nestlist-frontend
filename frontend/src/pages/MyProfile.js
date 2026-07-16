@@ -8,7 +8,8 @@ export default function MyProfile({ agent, token, onUpdate }) {
     specialty: agent.specialty || '', contact: agent.contact || '',
     tone: agent.tone || 'Warm & Conversational',
     emphasis: agent.emphasis || 'Lifestyle & Prestige',
-    signature: agent.signature || 'Where your next chapter begins.'
+    signature: agent.signature || 'Where your next chapter begins.',
+    poster_color: agent.poster_color || '#1a1a5c'
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -168,6 +169,18 @@ export default function MyProfile({ agent, token, onUpdate }) {
             <div className="form-group">
               <label className="form-label">Contact</label>
               <input className="form-input" value={form.contact} onChange={e => set('contact', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Poster Background Color</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <input
+                  type="color"
+                  value={form.poster_color}
+                  onChange={e => set('poster_color', e.target.value)}
+                  style={{ width: '44px', height: '36px', padding: '2px', border: '1px solid rgba(212,175,55,0.3)', borderRadius: '4px', background: 'transparent', cursor: 'pointer' }}
+                />
+                <input className="form-input" value={form.poster_color} onChange={e => set('poster_color', e.target.value)} style={{ maxWidth: '120px' }} />
+              </div>
             </div>
           </div>
         </div>
