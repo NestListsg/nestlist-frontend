@@ -196,7 +196,7 @@ export default function MyProfile({ agent, token, onUpdate }) {
         <div className="section-label">Notifications</div>
         <div className="form-group">
           {telegramConnected ? (
-            <div className="success-msg">Connected ‚Äî new leads on your listings will be sent to your Telegram.</div>
+            <div className="success-msg">Connected — new leads on your listings will be sent to your Telegram.</div>
           ) : (
             <>
               <button
@@ -215,7 +215,7 @@ export default function MyProfile({ agent, token, onUpdate }) {
                   style={{ maxWidth: '280px', marginTop: '8px' }}
                   onClick={pollProfile}
                 >
-                  I've connected ‚Äî refresh status
+                  I've connected — refresh status
                 </button>
               )}
               {pollError && <div className="error-msg">{pollError}</div>}
