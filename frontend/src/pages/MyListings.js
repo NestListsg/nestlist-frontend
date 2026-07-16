@@ -13,14 +13,14 @@ function generateCaption(listing, platform, style) {
   const body = cleanContent.slice(0, 800);
   const shortBody = cleanContent.slice(0, 300);
 
-  const bullets = `‚Ä¢ ${listing.land_size ? listing.land_size.toLocaleString() + ' sqft land' : 'Land on request'}
-‚Ä¢ ${listing.built_up ? listing.built_up.toLocaleString() + ' sqft built-up' : 'Built-up on request'}
-‚Ä¢ ${listing.bedrooms || 'Bedrooms on request'}
-‚Ä¢ ${listing.features || 'Premium features throughout'}`;
+  const bullets = `• ${listing.land_size ? listing.land_size.toLocaleString() + ' sqft land' : 'Land on request'}
+• ${listing.built_up ? listing.built_up.toLocaleString() + ' sqft built-up' : 'Built-up on request'}
+• ${listing.bedrooms || 'Bedrooms on request'}
+• ${listing.features || 'Premium features throughout'}`;
 
   const tldr = {
-    facebook: `üè° ${listing.property_type} | ${listing.location}
-üí∞ SGD ${listing.price}
+    facebook: `🏡 ${listing.property_type} | ${listing.location}
+💰 SGD ${listing.price}
 
 ${bullets}
 
@@ -28,19 +28,19 @@ Interested? Visit ${listingUrl} or drop us a message.
 
 #NestList #NestListPrestige #SingaporeProperty #GCB #LandedProperty #PropertySG #RealEstate #Singapore #LuxuryProperty`,
 
-    instagram: `üè° ${listing.property_type}
-üìç ${listing.location}
-üí∞ SGD ${listing.price}
+    instagram: `🏡 ${listing.property_type}
+📍 ${listing.location}
+💰 SGD ${listing.price}
 
 ${bullets}
 
-DM me or visit ${listingUrl} üè°
+DM me or visit ${listingUrl} 🏡
 
 #NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #PropertyForSale`,
 
-    linkedin: `üè° New Listing | ${listing.property_type}
-üìç ${listing.location}
-üí∞ SGD ${listing.price}
+    linkedin: `🏡 New Listing | ${listing.property_type}
+📍 ${listing.location}
+💰 SGD ${listing.price}
 
 Key details:
 ${bullets}
@@ -51,19 +51,19 @@ Available for private viewing. Connect with me or visit ${listingUrl}.
 
     whatsapp: `Hi! Quick summary of a new listing:
 
-üè° *${listing.property_type}*
-üìç ${listing.location}
-üí∞ SGD ${listing.price}
+🏡 *${listing.property_type}*
+📍 ${listing.location}
+💰 SGD ${listing.price}
 
 ${bullets}
 
-Reply to arrange a private viewing or visit ${listingUrl}. Thank you! üôè`
+Reply to arrange a private viewing or visit ${listingUrl}. Thank you! 🙏`
   };
 
   const long = {
-    facebook: `üè° NEW LISTING | ${listing.property_type}
-üìç ${listing.location}
-üí∞ SGD ${listing.price}
+    facebook: `🏡 NEW LISTING | ${listing.property_type}
+📍 ${listing.location}
+💰 SGD ${listing.price}
 
 ${body}...
 
@@ -71,21 +71,21 @@ Interested? Visit ${listingUrl} or drop us a message.
 
 #NestList #NestListPrestige #SingaporeProperty #GCB #LandedProperty #PropertySG #RealEstate #Singapore #LuxuryProperty #HomeSweetHome`,
 
-    instagram: `‚ú® ${listing.property_type} for sale ‚ú®
+    instagram: `✨ ${listing.property_type} for sale ✨
 
-üìç ${listing.location}
-üí∞ SGD ${listing.price}
+📍 ${listing.location}
+💰 SGD ${listing.price}
 
 ${shortBody}...
 
-DM me or visit ${listingUrl} to find out more üè°
+DM me or visit ${listingUrl} to find out more 🏡
 
 #NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #SingaporeLife #PropertyInvestment #LandedHouse #Bungalow #PenthouseLiving #PropertyForSale`,
 
-    linkedin: `üè° New Property Listing | ${listing.property_type}
+    linkedin: `🏡 New Property Listing | ${listing.property_type}
 
-üìç Location: ${listing.location}
-üí∞ Asking Price: SGD ${listing.price}
+📍 Location: ${listing.location}
+💰 Asking Price: SGD ${listing.price}
 
 ${listing.content?.slice(0, 600) || ''}...
 
@@ -97,54 +97,54 @@ Reach me at ${listingUrl} or reply directly to this post.
 
     whatsapp: `Hi! I have a new property listing that may interest you.
 
-üè° *${listing.property_type}*
-üìç ${listing.location}
-üí∞ SGD ${listing.price}
+🏡 *${listing.property_type}*
+📍 ${listing.location}
+💰 SGD ${listing.price}
 
 ${listing.content?.slice(0, 400) || ''}...
 
 For more details and to arrange a private viewing, please reply to this message or visit ${listingUrl}.
 
-Thank you! üôè`
+Thank you! 🙏`
   };
 
   const combined = {
-    facebook: `üè° NEW LISTING | ${listing.property_type}
-üìç ${listing.location}
-üí∞ SGD ${listing.price}
+    facebook: `🏡 NEW LISTING | ${listing.property_type}
+📍 ${listing.location}
+💰 SGD ${listing.price}
 
-‚ö° AT A GLANCE
+⚡ AT A GLANCE
 ${bullets}
 
-üìñ THE FULL STORY
+📖 THE FULL STORY
 ${body}...
 
 Interested? Visit ${listingUrl} or drop us a message.
 
 #NestList #NestListPrestige #SingaporeProperty #GCB #LandedProperty #PropertySG #RealEstate #Singapore #LuxuryProperty #HomeSweetHome`,
 
-    instagram: `üè° ${listing.property_type}
-üìç ${listing.location}
-üí∞ SGD ${listing.price}
+    instagram: `🏡 ${listing.property_type}
+📍 ${listing.location}
+💰 SGD ${listing.price}
 
-‚ö° AT A GLANCE
+⚡ AT A GLANCE
 ${bullets}
 
-üìñ THE STORY
+📖 THE STORY
 ${shortBody}...
 
-DM me or visit ${listingUrl} üè°
+DM me or visit ${listingUrl} 🏡
 
 #NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #PropertyForSale`,
 
-    linkedin: `üè° New Property Listing | ${listing.property_type}
-üìç ${listing.location}
-üí∞ SGD ${listing.price}
+    linkedin: `🏡 New Property Listing | ${listing.property_type}
+📍 ${listing.location}
+💰 SGD ${listing.price}
 
-‚ö° AT A GLANCE
+⚡ AT A GLANCE
 ${bullets}
 
-üìñ THE FULL STORY
+📖 THE FULL STORY
 ${listing.content?.slice(0, 600) || ''}...
 
 Available for private viewing. Reach me at ${listingUrl} or reply directly.
@@ -153,25 +153,25 @@ Available for private viewing. Reach me at ${listingUrl} or reply directly.
 
     whatsapp: `Hi! I have a new property listing that may interest you.
 
-üè° *${listing.property_type}*
-üìç ${listing.location}
-üí∞ SGD ${listing.price}
+🏡 *${listing.property_type}*
+📍 ${listing.location}
+💰 SGD ${listing.price}
 
-‚ö° AT A GLANCE
+⚡ AT A GLANCE
 ${bullets}
 
-üìñ THE FULL STORY
+📖 THE FULL STORY
 ${listing.content?.slice(0, 400) || ''}...
 
-Reply to arrange a private viewing or visit ${listingUrl}. Thank you! üôè`
+Reply to arrange a private viewing or visit ${listingUrl}. Thank you! 🙏`
   };
 
   const tiktok = {
-    tiktok: `${listing.property_type} in ${listing.location} üè°
+    tiktok: `${listing.property_type} in ${listing.location} 🏡
 SGD ${listing.price}
 ${listing.land_size ? listing.land_size.toLocaleString() + ' sqft' : ''} | ${listing.bedrooms || ''}
-Upload your property video and use this caption üëÜ
-DM to arrange viewing üîë
+Upload your property video and use this caption 👆
+DM to arrange viewing 🔑
 
 #SingaporeProperty #PropertySG #LandedSG #RealEstateSG #SGProperty`
   };
@@ -183,17 +183,17 @@ DM to arrange viewing üîë
 }
 
 const PLATFORMS = [
-  { key: 'facebook', label: 'Facebook', emoji: 'üìò', url: 'https://www.facebook.com' },
-  { key: 'instagram', label: 'Instagram', emoji: 'üì∏', url: 'https://www.instagram.com' },
-  { key: 'linkedin', label: 'LinkedIn', emoji: 'üíº', url: 'https://www.linkedin.com/feed' },
-  { key: 'whatsapp', label: 'WhatsApp', emoji: 'üí¨', url: 'https://web.whatsapp.com' },
-  { key: 'tiktok', label: 'TikTok', emoji: 'üéµ', url: 'https://www.tiktok.com/upload' },
+  { key: 'facebook', label: 'Facebook', emoji: '📘', url: 'https://www.facebook.com' },
+  { key: 'instagram', label: 'Instagram', emoji: '📸', url: 'https://www.instagram.com' },
+  { key: 'linkedin', label: 'LinkedIn', emoji: '💼', url: 'https://www.linkedin.com/feed' },
+  { key: 'whatsapp', label: 'WhatsApp', emoji: '💬', url: 'https://web.whatsapp.com' },
+  { key: 'tiktok', label: 'TikTok', emoji: '🎵', url: 'https://www.tiktok.com/upload' },
 ];
 
 const STYLES = [
-  { key: 'long', label: 'üìñ Full Story' },
-  { key: 'tldr', label: '‚ö° Quick Summary' },
-  { key: 'combined', label: 'üìñ‚ö° Both' },
+  { key: 'long', label: '📖 Full Story' },
+  { key: 'tldr', label: '⚡ Quick Summary' },
+  { key: 'combined', label: '📖⚡ Both' },
 ];
 
 export default function MyListings({ agent, token }) {
@@ -317,7 +317,7 @@ export default function MyListings({ agent, token }) {
       {listings.map(l => (
         <div key={l.id} className="listing-card">
           <div className="listing-card-header" onClick={() => setExpanded(expanded === l.id ? null : l.id)}>
-            <div className="listing-card-title">{l.property_type} ‚Äî {l.location} ‚Äî SGD {l.price}</div>
+            <div className="listing-card-title">{l.property_type} — {l.location} — SGD {l.price}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <button
                 onClick={(e) => { e.stopPropagation(); handleDelete(l.id); }}
@@ -333,9 +333,9 @@ export default function MyListings({ agent, token }) {
                   transition: 'opacity 0.2s'
                 }}
               >
-                üóëÔ∏è
+                🗑️
               </button>
-              <div className="listing-card-date">{l.created_at?.slice(0, 10)} {expanded === l.id ? '‚ñ≤' : '‚ñº'}</div>
+              <div className="listing-card-date">{l.created_at?.slice(0, 10)} {expanded === l.id ? '▲' : '▼'}</div>
             </div>
           </div>
 
@@ -363,7 +363,7 @@ export default function MyListings({ agent, token }) {
                             textDecoration: 'none'
                           }}
                         >
-                          ‚¨á Save
+                          ⬇ Save
                         </a>
                       </div>
                     ))}
@@ -384,7 +384,7 @@ export default function MyListings({ agent, token }) {
                       marginBottom: '4px'
                     }}
                   >
-                    {downloading[l.id] ? 'Preparing ZIP...' : `‚¨á Download All ${l.images.length} Photos as ZIP`}
+                    {downloading[l.id] ? 'Preparing ZIP...' : `⬇ Download All ${l.images.length} Photos as ZIP`}
                   </button>
                 </div>
               )}
@@ -398,7 +398,7 @@ export default function MyListings({ agent, token }) {
                 borderRadius: '4px',
                 padding: '16px'
               }}>
-                <div className="section-label" style={{ marginBottom: '4px' }}>üì≤ Share This Listing</div>
+                <div className="section-label" style={{ marginBottom: '4px' }}>📲 Share This Listing</div>
                 <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '14px' }}>
                   Select a platform and caption style. Copy and paste directly into your own account.
                 </div>
@@ -427,7 +427,7 @@ export default function MyListings({ agent, token }) {
                       onClick={() => handleGeneratePoster(l)}
                       disabled={posterLoading[l.id]}
                     >
-                      {posterLoading[l.id] ? 'Generating...' : l.poster_url ? 'üñºÔ∏è Regenerate Poster' : 'üñºÔ∏è Generate Poster'}
+                      {posterLoading[l.id] ? 'Generating...' : l.poster_url ? '🖼️ Regenerate Poster' : '🖼️ Generate Poster'}
                     </button>
                     {l.poster_url && (
                       <a
@@ -446,7 +446,7 @@ export default function MyListings({ agent, token }) {
                           textDecoration: 'none'
                         }}
                       >
-                        ‚¨á Download
+                        ⬇ Download
                       </a>
                     )}
                   </div>
@@ -523,7 +523,7 @@ export default function MyListings({ agent, token }) {
                         style={{ maxWidth: '180px' }}
                         onClick={() => handleCopy(l.id, p.key, generateCaption(l, p.key, getCaptionStyle(l.id)))}
                       >
-                        {copied[`${l.id}-${p.key}`] ? '‚úÖ Copied!' : 'üìã Copy Caption'}
+                        {copied[`${l.id}-${p.key}`] ? '✅ Copied!' : '📋 Copy Caption'}
                       </button>
 
                       {canWebShare && (
@@ -540,7 +540,7 @@ export default function MyListings({ agent, token }) {
                             fontFamily: "'Montserrat', sans-serif"
                           }}
                         >
-                          {shareStatus[`${l.id}-${p.key}`] || 'üì§ Share'}
+                          {shareStatus[`${l.id}-${p.key}`] || '📤 Share'}
                         </button>
                       )}
 
