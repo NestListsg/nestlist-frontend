@@ -422,7 +422,7 @@ export default function NewListing({ agent, token }) {
                           lineHeight: '1'
                         }}
                       >
-                        √ó
+                        ×
                       </button>
                     </div>
                   ))}
