@@ -196,7 +196,7 @@ const STYLES = [
   { key: 'combined', label: '📖⚡ Both' },
 ];
 
-export default function MyListings({ agent, token }) {
+export default function MyListings({ agent, token, onEdit }) {
   const [listings, setListings] = useState([]);
   const [expanded, setExpanded] = useState(null);
   const [activePlatform, setActivePlatform] = useState({});
@@ -341,6 +341,21 @@ export default function MyListings({ agent, token }) {
           <div className="listing-card-header" onClick={() => setExpanded(expanded === l.id ? null : l.id)}>
             <div className="listing-card-title">{l.property_type} — {l.location} — SGD {l.price}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(l); }}
+                title="Edit listing"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  padding: '4px',
+                  opacity: 0.7,
+                  transition: 'opacity 0.2s'
+                }}
+              >
+                ✏️
+              </button>
               <button
                 onClick={(e) => { e.stopPropagation(); handleDelete(l.id); }}
                 disabled={deleting[l.id]}
