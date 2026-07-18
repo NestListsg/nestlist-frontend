@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -9,7 +9,8 @@ export default function MyProfile({ agent, token, onUpdate }) {
     tone: agent.tone || 'Warm & Conversational',
     emphasis: agent.emphasis || 'Lifestyle & Prestige',
     signature: agent.signature || 'Where your next chapter begins.',
-    poster_color: agent.poster_color || '#1a1a5c'
+    poster_color: agent.poster_color || '#1a1a5c',
+    poster_template_id: agent.poster_template_id || 'editorial'
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -20,6 +21,16 @@ export default function MyProfile({ agent, token, onUpdate }) {
   const [photoUrl, setPhotoUrl] = useState(agent.photo_url || '');
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState('');
+  const [posterTemplates, setPosterTemplates] = useState([]);
+
+  useEffect(() => {
+    fetch(`${API}/api/poster-templates`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(data => setPosterTemplates(Array.isArray(data) ? data : []))
+      .catch(() => setPosterTemplates([]));
+  }, [token]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -184,6 +195,33 @@ export default function MyProfile({ agent, token, onUpdate }) {
             </div>
           </div>
         </div>
+
+        {posterTemplates.length > 0 && (
+          <div className="form-group">
+            <label className="form-label">Poster Style</label>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              {posterTemplates.map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => set('poster_template_id', t.id)}
+                  style={{
+                    background: form.poster_template_id === t.id ? 'rgba(212,175,55,0.2)' : 'transparent',
+                    border: `2px solid ${form.poster_template_id === t.id ? '#D4AF37' : 'rgba(212,175,55,0.25)'}`,
+                    borderRadius: '4px',
+                    padding: '10px 16px',
+                    cursor: 'pointer',
+                    color: form.poster_template_id === t.id ? '#F0C84A' : 'rgba(248,244,236,0.7)',
+                    fontSize: '13px',
+                    fontFamily: "'Montserrat', sans-serif"
+                  }}
+                >
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="divider" />
         <div className="section-label">My Writing Style</div>
