@@ -10,8 +10,26 @@ const DEFAULT_FORM = {
   sg_citizen: true
 };
 
-export default function NewListing({ agent, token }) {
+export default function NewListing({ agent, token, editingListing, onDoneEditing }) {
+  const isEditing = !!editingListing;
   const [form, setForm] = useState(() => {
+    if (editingListing) {
+      return {
+        property_type: editingListing.property_type || DEFAULT_FORM.property_type,
+        location: editingListing.location || '',
+        land_size: editingListing.land_size || 0,
+        built_up: editingListing.built_up || 0,
+        bedrooms: editingListing.bedrooms || '',
+        bathrooms: editingListing.bathrooms || '',
+        price: editingListing.price || '',
+        features: editingListing.features || '',
+        plot_width: editingListing.plot_width || 0,
+        plot_depth: editingListing.plot_depth || 0,
+        storeys: editingListing.storeys || 0,
+        site_coverage: editingListing.site_coverage || 0,
+        sg_citizen: true
+      };
+    }
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       return saved ? JSON.parse(saved) : DEFAULT_FORM;
@@ -19,10 +37,11 @@ export default function NewListing({ agent, token }) {
       return DEFAULT_FORM;
     }
   });
-  const [declaration, setDeclaration] = useState(false);
+  const [declaration, setDeclaration] = useState(isEditing);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState('');
   const [imageLoading, setImageLoading] = useState(false);
   const [imagePreviews, setImagePreviews] = useState([]);
   const [imageSuccess, setImageSuccess] = useState('');
@@ -34,12 +53,13 @@ export default function NewListing({ agent, token }) {
   const fileRef = useRef();
   const photoRef = useRef();
 
-  // Persist form to localStorage whenever it changes
+  // Persist form to localStorage whenever it changes (skip while editing an existing listing)
   useEffect(() => {
+    if (isEditing) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(form));
     } catch {}
-  }, [form]);
+  }, [form, isEditing]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   // sg_citizen defaults to true - GCB/landed purchases are Singapore Citizens only
@@ -166,8 +186,20 @@ export default function NewListing({ agent, token }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!declaration) { setError('Please tick the declaration box.'); return; }
-    setError(''); setLoading(true); setResult(null);
+    setError(''); setLoading(true); setResult(null); setSaveSuccess('');
     try {
+      if (isEditing) {
+        const res = await fetch(`${API}/api/listings/${editingListing.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(form)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Error saving listing');
+        setSaveSuccess('Listing updated!');
+        setTimeout(() => onDoneEditing && onDoneEditing(), 900);
+        return;
+      }
       const res = await fetch(`${API}/api/listings/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -191,11 +223,13 @@ export default function NewListing({ agent, token }) {
 
   return (
     <div className="page-content">
-      <div className="page-title">Submit New Listing</div>
-      <div className="page-subtitle">Fill in the details below. Claude will write your personalised listing automatically.</div>
+      <div className="page-title">{isEditing ? 'Edit Listing' : 'Submit New Listing'}</div>
+      <div className="page-subtitle">
+        {isEditing ? 'Update the details below and save your changes.' : 'Fill in the details below. Claude will write your personalised listing automatically.'}
+      </div>
 
       {/* Saved form notice */}
-      {(form.location || form.price || form.features) && !result && (
+      {!isEditing && (form.location || form.price || form.features) && !result && (
         <div style={{
           background: 'rgba(212,175,55,0.08)',
           border: '1px solid rgba(212,175,55,0.25)',
@@ -229,7 +263,7 @@ export default function NewListing({ agent, token }) {
       )}
 
       {/* Smart Fill */}
-      <div style={{
+      {!isEditing && <div style={{
         background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.3)',
         borderRadius: '4px', padding: '20px 24px', marginBottom: '24px'
       }}>
@@ -280,7 +314,7 @@ export default function NewListing({ agent, token }) {
             Clear and Upload New Images
           </button>
         )}
-      </div>
+      </div>}
 
       {/* Form */}
       <form onSubmit={handleSubmit}>
@@ -342,32 +376,36 @@ export default function NewListing({ agent, token }) {
           <textarea className="form-textarea" value={form.features} onChange={e => set('features', e.target.value)} placeholder="e.g. Private pool, 3-car garage, newly renovated" />
         </div>
 
-        
-        <div className="form-checkbox">
-          <input type="checkbox" id="declaration" checked={declaration} onChange={e => setDeclaration(e.target.checked)} />
-          <label htmlFor="declaration">I confirm all details are accurate and truthful.</label>
-        </div>
+        {!isEditing && (
+          <div className="form-checkbox">
+            <input type="checkbox" id="declaration" checked={declaration} onChange={e => setDeclaration(e.target.checked)} />
+            <label htmlFor="declaration">I confirm all details are accurate and truthful.</label>
+          </div>
+        )}
 
         {error && <div className="error-msg">{error}</div>}
+        {saveSuccess && <div className="success-msg">{saveSuccess}</div>}
 
         <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
           <button
-            type="button" onClick={clearForm}
+            type="button" onClick={isEditing ? onDoneEditing : clearForm}
             style={{
               background: 'transparent', border: '1px solid rgba(212,175,55,0.5)',
               color: '#F0C84A', padding: '10px 20px', borderRadius: '3px',
               cursor: 'pointer', fontSize: '13px', fontFamily: "'Montserrat', sans-serif"
             }}
           >
-            Clear Form
+            {isEditing ? 'Cancel' : 'Clear Form'}
           </button>
           <button className="btn-primary" type="submit" disabled={loading}>
-            {loading ? <><span className="spinner" />Generating your listing...</> : 'Generate My Listing Automatically'}
+            {loading
+              ? <><span className="spinner" />{isEditing ? 'Saving...' : 'Generating your listing...'}</>
+              : (isEditing ? 'Save Changes' : 'Generate My Listing Automatically')}
           </button>
         </div>
       </form>
 
-      {result && (
+      {!isEditing && result && (
         <>
           <div className="divider" />
           <div className="section-label">Step 1 - URA Compliance Check</div>
