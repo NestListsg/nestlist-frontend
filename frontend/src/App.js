@@ -74,6 +74,17 @@ function AuthenticatedApp() {
   const [agent, setAgent] = useState(JSON.parse(localStorage.getItem('nl_agent') || 'null'));
   const [page, setPage] = useState('Dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [editingListing, setEditingListing] = useState(null);
+
+  const handleEditListing = (listing) => {
+    setEditingListing(listing);
+    setPage('New Listing');
+  };
+
+  const navigateTo = (p) => {
+    setEditingListing(null);
+    setPage(p);
+  };
 
   const handleLogin = (token, agent) => {
     localStorage.setItem('nl_token', token);
@@ -100,9 +111,9 @@ function AuthenticatedApp() {
 
   const renderPage = () => {
     switch(page) {
-      case 'Dashboard': return <Dashboard agent={agent} token={token} setPage={setPage} />;
-      case 'New Listing': return <NewListing agent={agent} token={token} />;
-      case 'My Listings': return <MyListings agent={agent} token={token} />;
+      case 'Dashboard': return <Dashboard agent={agent} token={token} setPage={navigateTo} />;
+      case 'New Listing': return <NewListing agent={agent} token={token} editingListing={editingListing} onDoneEditing={() => { setEditingListing(null); setPage('My Listings'); }} />;
+      case 'My Listings': return <MyListings agent={agent} token={token} onEdit={handleEditListing} />;
       case 'Enquiries': return <Enquiries agent={agent} token={token} />;
       case 'My Profile': return <MyProfile agent={agent} token={token} onUpdate={updateAgent} />;
       case 'Billing': return <Billing />;
@@ -115,7 +126,7 @@ function AuthenticatedApp() {
       <button className="sb-toggle" onClick={() => setSidebarOpen(true)}>☰</button>
       <Sidebar
         page={page}
-        setPage={setPage}
+        setPage={navigateTo}
         agent={agent}
         onLogout={handleLogout}
         isOpen={sidebarOpen}
