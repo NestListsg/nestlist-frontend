@@ -10,7 +10,7 @@
     "express": "^4.18.2"
   },
   "scripts": {
-    "start": "node server.js",
+    "start": "npx serve -s build -l $PORT",
     "build": "react-scripts build"
   },
   "devDependencies": {
