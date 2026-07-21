@@ -9,6 +9,7 @@ import Enquiries from './pages/Enquiries';
 import MyProfile from './pages/MyProfile';
 import Billing from './pages/Billing';
 import PublicListing from './pages/PublicListing';
+import InstagramCallback from './pages/InstagramCallback';
 
 const LOGO = '/logo_2.png';
 
@@ -145,6 +146,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/l/:listingId" element={<PublicListing />} />
+        <Route path="/auth/instagram/callback" element={<InstagramCallback />} />
         <Route path="*" element={<AuthenticatedApp />} />
       </Routes>
     </Router>

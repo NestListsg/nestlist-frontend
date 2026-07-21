@@ -209,6 +209,10 @@ export default function MyListings({ agent, token, onEdit }) {
   const [posterError, setPosterError] = useState({});
   const [posterPhotoIndex, setPosterPhotoIndex] = useState({});
   const [deletingPhoto, setDeletingPhoto] = useState({});
+  const [igCaption, setIgCaption] = useState({});
+  const [igPosting, setIgPosting] = useState({});
+  const [igPostError, setIgPostError] = useState({});
+  const [igPostSuccess, setIgPostSuccess] = useState({});
 
   useEffect(() => {
     fetch(`${API}/api/listings`, {
@@ -321,6 +325,27 @@ export default function MyListings({ agent, token, onEdit }) {
       alert('Failed to delete photo.');
     } finally {
       setDeletingPhoto(d => ({ ...d, [`${listing.id}-${index}`]: false }));
+    }
+  };
+
+  const handlePostInstagram = async (listing) => {
+    const caption = igCaption[listing.id] ?? generateCaption(listing, 'instagram', getCaptionStyle(listing.id));
+    setIgPosting(p => ({ ...p, [listing.id]: true }));
+    setIgPostError(e => ({ ...e, [listing.id]: '' }));
+    setIgPostSuccess(s => ({ ...s, [listing.id]: '' }));
+    try {
+      const res = await fetch(`${API}/api/listings/${listing.id}/post-instagram`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ caption })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to post to Instagram');
+      setIgPostSuccess(s => ({ ...s, [listing.id]: '🚀 Posted to Instagram!' }));
+    } catch (err) {
+      setIgPostError(e => ({ ...e, [listing.id]: err.message }));
+    } finally {
+      setIgPosting(p => ({ ...p, [listing.id]: false }));
     }
   };
 
@@ -634,6 +659,34 @@ export default function MyListings({ agent, token, onEdit }) {
                         {p.emoji} Open {p.label}
                       </a>
                     </div>
+
+                    {p.key === 'instagram' && agent.can_use_instagram_beta && agent.instagram_username && (
+                      <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(212,175,55,0.15)' }}>
+                        <label className="form-label">Post directly to Instagram (@{agent.instagram_username})</label>
+                        <textarea
+                          className="form-textarea"
+                          rows={4}
+                          value={igCaption[l.id] ?? generateCaption(l, 'instagram', getCaptionStyle(l.id))}
+                          onChange={e => setIgCaption(c => ({ ...c, [l.id]: e.target.value }))}
+                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="btn-gold"
+                            style={{ maxWidth: '220px' }}
+                            onClick={() => handlePostInstagram(l)}
+                            disabled={igPosting[l.id] || !l.poster_url}
+                          >
+                            {igPosting[l.id] ? 'Posting...' : '🚀 Post to Instagram'}
+                          </button>
+                          {!l.poster_url && (
+                            <span style={{ fontSize: '11px', color: 'rgba(248,244,236,0.5)' }}>Generate a poster above first</span>
+                          )}
+                        </div>
+                        {igPostError[l.id] && <div className="error-msg">{igPostError[l.id]}</div>}
+                        {igPostSuccess[l.id] && <div className="success-msg">{igPostSuccess[l.id]}</div>}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

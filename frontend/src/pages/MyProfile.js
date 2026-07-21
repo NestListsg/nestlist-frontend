@@ -18,6 +18,8 @@ export default function MyProfile({ agent, token, onUpdate }) {
   const [telegramConnected, setTelegramConnected] = useState(!!agent.telegram_chat_id);
   const [connecting, setConnecting] = useState(false);
   const [pollError, setPollError] = useState('');
+  const [igConnecting, setIgConnecting] = useState(false);
+  const [igConnectError, setIgConnectError] = useState('');
   const [photoUrl, setPhotoUrl] = useState(agent.photo_url || '');
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState('');
@@ -93,6 +95,21 @@ export default function MyProfile({ agent, token, onUpdate }) {
     } catch (err) {
       setPollError(err.message);
       setConnecting(false);
+    }
+  };
+
+  const handleConnectInstagram = async () => {
+    setIgConnecting(true); setIgConnectError('');
+    try {
+      const res = await fetch(`${API}/api/profile/instagram-connect-link`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Could not get connect link');
+      window.location.href = data.link;
+    } catch (err) {
+      setIgConnectError(err.message);
+      setIgConnecting(false);
     }
   };
 
@@ -273,6 +290,27 @@ export default function MyProfile({ agent, token, onUpdate }) {
             </>
           )}
         </div>
+
+        {agent.can_use_instagram_beta && (
+          <div className="form-group">
+            {agent.instagram_username ? (
+              <div className="success-msg">Connected as @{agent.instagram_username} on Instagram.</div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="btn-gold"
+                  style={{ maxWidth: '280px' }}
+                  onClick={handleConnectInstagram}
+                  disabled={igConnecting}
+                >
+                  {igConnecting ? 'Redirecting to Instagram...' : 'Connect Instagram'}
+                </button>
+                {igConnectError && <div className="error-msg">{igConnectError}</div>}
+              </>
+            )}
+          </div>
+        )}
 
         {error && <div className="error-msg">{error}</div>}
         {success && <div className="success-msg">{success}</div>}
