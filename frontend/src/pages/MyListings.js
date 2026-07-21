@@ -15,7 +15,7 @@ function generateCaption(listing, platform, style) {
 
   const bullets = `• ${listing.land_size ? listing.land_size.toLocaleString() + ' sqft land' : 'Land on request'}
 • ${listing.built_up ? listing.built_up.toLocaleString() + ' sqft built-up' : 'Built-up on request'}
-• ${listing.bedrooms || 'Bedrooms on request'}
+• ${listing.bedrooms ? listing.bedrooms + ' Bedrooms' : 'Bedrooms on request'}
 • ${listing.features || 'Premium features throughout'}`;
 
   const tldr = {
@@ -169,7 +169,7 @@ Reply to arrange a private viewing or visit ${listingUrl}. Thank you! 🙏`
   const tiktok = {
     tiktok: `${listing.property_type} in ${listing.location} 🏡
 SGD ${listing.price}
-${listing.land_size ? listing.land_size.toLocaleString() + ' sqft' : ''} | ${listing.bedrooms || ''}
+${listing.land_size ? listing.land_size.toLocaleString() + ' sqft' : ''} | ${listing.bedrooms ? listing.bedrooms + ' Bedrooms' : ''}
 Upload your property video and use this caption 👆
 DM to arrange viewing 🔑
 
