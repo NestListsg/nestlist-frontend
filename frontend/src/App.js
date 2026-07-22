@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import NewListing from './pages/NewListing';
 import MyListings from './pages/MyListings';
+import MyOrganiser from './pages/MyOrganiser';
 import Enquiries from './pages/Enquiries';
 import MyProfile from './pages/MyProfile';
 import Billing from './pages/Billing';
@@ -14,7 +15,7 @@ import InstagramCallback from './pages/InstagramCallback';
 const LOGO = '/logo_2.png';
 
 function Sidebar({ page, setPage, agent, onLogout, isOpen, onClose }) {
-  const navItems = ['Dashboard', 'New Listing', 'My Listings', 'Enquiries', 'My Profile', 'Billing'];
+  const navItems = ['Dashboard', 'New Listing', 'My Listings', 'My Organiser', 'Enquiries', 'My Profile', 'Billing'];
   const initials = agent?.name?.split(' ').slice(0,2).map(n => n[0]).join('').toUpperCase() || 'NL';
 
   const handleNavClick = (item) => {
@@ -115,6 +116,7 @@ function AuthenticatedApp() {
       case 'Dashboard': return <Dashboard agent={agent} token={token} setPage={navigateTo} />;
       case 'New Listing': return <NewListing agent={agent} token={token} editingListing={editingListing} onDoneEditing={() => { setEditingListing(null); setPage('My Listings'); }} />;
       case 'My Listings': return <MyListings agent={agent} token={token} onEdit={handleEditListing} />;
+      case 'My Organiser': return <MyOrganiser agent={agent} token={token} />;
       case 'Enquiries': return <Enquiries agent={agent} token={token} />;
       case 'My Profile': return <MyProfile agent={agent} token={token} onUpdate={updateAgent} />;
       case 'Billing': return <Billing />;

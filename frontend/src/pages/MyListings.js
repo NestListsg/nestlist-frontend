@@ -231,7 +231,7 @@ export default function MyListings({ agent, token, onEdit }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this listing? This cannot be undone.')) return;
+    if (!window.confirm('Move this listing to My Organiser? It will disappear from My Listings, but you can still view it -- or permanently delete it -- from My Organiser.')) return;
     setDeleting(d => ({ ...d, [id]: true }));
     try {
       await fetch(`${API}/api/listings/${id}`, {
