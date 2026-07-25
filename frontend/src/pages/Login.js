@@ -15,6 +15,8 @@ export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showPassword2, setShowPassword2] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetSent, setResetSent] = useState(false);
 
   const eyeStyle = {
     position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
@@ -36,6 +38,23 @@ export default function Login({ onLogin }) {
       onLogin(data.token, data.agent);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setError(''); setLoading(true);
+    try {
+      await fetch(`${API}/api/password-reset/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail })
+      });
+      setResetSent(true); // backend always returns a generic success shape
+    } catch (err) {
+      setError('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -75,7 +94,7 @@ export default function Login({ onLogin }) {
           <button className={`login-tab ${tab === 'register' ? 'active' : ''}`} onClick={() => { setTab('register'); setError(''); }}>Register</button>
         </div>
 
-        {tab === 'login' ? (
+        {tab === 'login' && (
           <form onSubmit={handleLogin}>
             <div className="form-group">
               <label className="form-label">Email</label>
@@ -90,12 +109,37 @@ export default function Login({ onLogin }) {
                 </span>
               </div>
             </div>
+            <div style={{ textAlign: 'right', marginTop: '-10px', marginBottom: '16px', fontSize: '12px' }}>
+              <span style={{ color: '#F0C84A', cursor: 'pointer' }} onClick={() => { setTab('forgot'); setError(''); setResetSent(false); }}>Forgot Password?</span>
+            </div>
             {error && <div className="error-msg">{error}</div>}
             <button className="btn-primary" type="submit" disabled={loading}>
               {loading ? 'Signing in...' : 'Login'}
             </button>
           </form>
-        ) : (
+        )}
+
+        {tab === 'forgot' && (
+          resetSent ? (
+            <div className="success-msg">If that email is registered with NestList, a reset link has been sent. Check your inbox (and spam folder).</div>
+          ) : (
+            <form onSubmit={handleForgotPassword}>
+              <div className="form-group">
+                <label className="form-label">Email</label>
+                <input className="form-input" type="email" value={resetEmail} onChange={e => setResetEmail(e.target.value)} required />
+              </div>
+              {error && <div className="error-msg">{error}</div>}
+              <button className="btn-primary" type="submit" disabled={loading}>
+                {loading ? 'Sending...' : 'Send Reset Link'}
+              </button>
+              <div style={{ textAlign: 'center', marginTop: '12px', fontSize: '12px' }}>
+                <span style={{ color: '#F0C84A', cursor: 'pointer' }} onClick={() => { setTab('login'); setError(''); }}>Back to Login</span>
+              </div>
+            </form>
+          )
+        )}
+
+        {tab === 'register' && (
           <form onSubmit={handleRegister}>
             <div className="form-group">
               <label className="form-label">Full Name</label>
