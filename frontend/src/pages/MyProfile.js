@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import EyeIcon from '../components/EyeIcon';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -316,9 +317,7 @@ export default function MyProfile({ agent, token, onUpdate }) {
                     style={{paddingRight:'40px'}}
                     required
                   />
-                  <span style={eyeStyle} onClick={() => setShowEmailPassword(v => !v)}>
-                    {showEmailPassword ? '🙈' : '👁'}
-                  </span>
+                  <EyeIcon open={showEmailPassword} onClick={() => setShowEmailPassword(v => !v)} style={eyeStyle} />
                 </div>
               </div>
               {emailError && <div className="error-msg">{emailError}</div>}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { LOGO_B64 } from '../config';
+import EyeIcon from '../components/EyeIcon';
 
 const API = '';
 
@@ -104,9 +105,7 @@ export default function Login({ onLogin }) {
               <label className="form-label">Password</label>
               <div style={{position:'relative'}}>
                 <input className="form-input" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} style={{paddingRight:'40px'}} required />
-                <span style={eyeStyle} onClick={() => setShowPassword(v => !v)}>
-                  {showPassword ? '🙈' : '👁'}
-                </span>
+                <EyeIcon open={showPassword} onClick={() => setShowPassword(v => !v)} style={eyeStyle} />
               </div>
             </div>
             <div style={{ textAlign: 'right', marginTop: '-10px', marginBottom: '16px', fontSize: '12px' }}>
@@ -168,18 +167,14 @@ export default function Login({ onLogin }) {
               <label className="form-label">Password</label>
               <div style={{position:'relative'}}>
                 <input className="form-input" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} style={{paddingRight:'40px'}} required />
-                <span style={eyeStyle} onClick={() => setShowPassword(v => !v)}>
-                  {showPassword ? '🙈' : '👁'}
-                </span>
+                <EyeIcon open={showPassword} onClick={() => setShowPassword(v => !v)} style={eyeStyle} />
               </div>
             </div>
             <div className="form-group">
               <label className="form-label">Confirm Password</label>
               <div style={{position:'relative'}}>
                 <input className="form-input" type={showPassword2 ? 'text' : 'password'} value={password2} onChange={e => setPassword2(e.target.value)} style={{paddingRight:'40px'}} required />
-                <span style={eyeStyle} onClick={() => setShowPassword2(v => !v)}>
-                  {showPassword2 ? '🙈' : '👁'}
-                </span>
+                <EyeIcon open={showPassword2} onClick={() => setShowPassword2(v => !v)} style={eyeStyle} />
               </div>
             </div>
             {error && <div className="error-msg">{error}</div>}
