@@ -30,6 +30,13 @@ export default function MyProfile({ agent, token, onUpdate }) {
   const [emailSaving, setEmailSaving] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [emailSuccess, setEmailSuccess] = useState('');
+  const [showEmailPassword, setShowEmailPassword] = useState(false);
+
+  const eyeStyle = {
+    position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
+    cursor: 'pointer', color: 'rgba(248,244,236,0.8)', fontSize: '16px',
+    userSelect: 'none', lineHeight: '1'
+  };
 
   useEffect(() => {
     fetch(`${API}/api/poster-templates`, {
@@ -300,13 +307,19 @@ export default function MyProfile({ agent, token, onUpdate }) {
               </div>
               <div className="form-group">
                 <label className="form-label">Current Password</label>
-                <input
-                  className="form-input"
-                  type="password"
-                  value={emailPassword}
-                  onChange={e => setEmailPassword(e.target.value)}
-                  required
-                />
+                <div style={{position:'relative'}}>
+                  <input
+                    className="form-input"
+                    type={showEmailPassword ? 'text' : 'password'}
+                    value={emailPassword}
+                    onChange={e => setEmailPassword(e.target.value)}
+                    style={{paddingRight:'40px'}}
+                    required
+                  />
+                  <span style={eyeStyle} onClick={() => setShowEmailPassword(v => !v)}>
+                    {showEmailPassword ? '🙈' : '👁'}
+                  </span>
+                </div>
               </div>
               {emailError && <div className="error-msg">{emailError}</div>}
               <div style={{ display: 'flex', gap: '8px' }}>
