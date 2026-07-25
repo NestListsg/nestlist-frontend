@@ -9,6 +9,7 @@ export default function Dashboard({ agent, token, setPage }) {
   const [pulseForm, setPulseForm] = useState(null);
   const [pulseSaving, setPulseSaving] = useState(false);
   const [pulseSaved, setPulseSaved] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const isAdmin = agent?.email === 'leesbjane@gmail.com';
 
@@ -37,6 +38,24 @@ export default function Dashboard({ agent, token, setPage }) {
       alert(err.message);
     } finally {
       setPulseSaving(false);
+    }
+  };
+
+  const refreshPulse = async () => {
+    setRefreshing(true);
+    try {
+      const res = await fetch(`${API}/api/market-pulse/refresh`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Refresh failed');
+      setPulse(data);
+      setPulseForm(data);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -91,14 +110,30 @@ export default function Dashboard({ agent, token, setPage }) {
         </div>
         <div className="market-panel">
           <div className="market-title" style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-            <span>Singapore Market Pulse</span>
+            <span style={{display:'flex', alignItems:'center', gap:'8px'}}>
+              Singapore Market Pulse
+              {pulse?.source === 'ura_api' ? (
+                <span style={{fontSize:'10px', color:'#4CAF50', border:'1px solid rgba(76,175,80,0.4)', borderRadius:'3px', padding:'2px 6px', letterSpacing:'0.03em'}}>LIVE · URA</span>
+              ) : (
+                <span style={{fontSize:'10px', color:'rgba(248,244,236,0.4)', border:'1px solid rgba(248,244,236,0.2)', borderRadius:'3px', padding:'2px 6px', letterSpacing:'0.03em'}}>MANUAL</span>
+              )}
+            </span>
             {isAdmin && !editing && (
-              <button
-                onClick={() => setEditing(true)}
-                style={{fontSize:'11px', background:'transparent', border:'1px solid rgba(212,175,55,0.4)', color:'rgba(212,175,55,0.7)', padding:'3px 10px', borderRadius:'3px', cursor:'pointer', fontFamily:"'Montserrat', sans-serif"}}
-              >
-                Edit
-              </button>
+              <div style={{display:'flex', gap:'6px'}}>
+                <button
+                  onClick={refreshPulse}
+                  disabled={refreshing}
+                  style={{fontSize:'11px', background:'transparent', border:'1px solid rgba(212,175,55,0.4)', color:'rgba(212,175,55,0.7)', padding:'3px 10px', borderRadius:'3px', cursor:'pointer', fontFamily:"'Montserrat', sans-serif"}}
+                >
+                  {refreshing ? 'Refreshing...' : 'Refresh from URA'}
+                </button>
+                <button
+                  onClick={() => setEditing(true)}
+                  style={{fontSize:'11px', background:'transparent', border:'1px solid rgba(212,175,55,0.4)', color:'rgba(212,175,55,0.7)', padding:'3px 10px', borderRadius:'3px', cursor:'pointer', fontFamily:"'Montserrat', sans-serif"}}
+                >
+                  Edit
+                </button>
+              </div>
             )}
           </div>
 
@@ -150,10 +185,10 @@ export default function Dashboard({ agent, token, setPage }) {
           {pulseSaved && <div style={{marginTop:'10px', color:'#4CAF50', fontSize:'12px'}}>Market data updated successfully.</div>}
 
           <div className="market-disclaimer">
-            ℹ <strong style={{color:'rgba(212,175,55,0.8)'}}>Disclaimer:</strong> Data sourced from URA Realis & EdgeProp Singapore. Figures are indicative and updated periodically. NestList does not warrant the accuracy of market data. Always verify with URA or a licensed professional before making property decisions.
+            ℹ <strong style={{color:'rgba(212,175,55,0.8)'}}>Disclaimer:</strong> GCB figures are computed from URA's Private Residential Property Transactions data service, filtered to Detached-house transactions within URA's 39 gazetted Good Class Bungalow Areas over the trailing 12 months. Figures are indicative. NestList does not warrant the accuracy of market data. Always verify with URA or a licensed professional before making property decisions.
           </div>
           <div className="market-source">
-            Source: URA Realis / EdgeProp &nbsp;|&nbsp; Last updated: {pulse?.last_updated || 'Jan 2026'}
+            Source: URA Data Service API &nbsp;|&nbsp; Last updated: {pulse?.last_updated || 'Jan 2026'}
           </div>
         </div>
       </div>
