@@ -24,6 +24,12 @@ export default function MyProfile({ agent, token, onUpdate }) {
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState('');
   const [posterTemplates, setPosterTemplates] = useState([]);
+  const [changingEmail, setChangingEmail] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [emailPassword, setEmailPassword] = useState('');
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [emailSuccess, setEmailSuccess] = useState('');
 
   useEffect(() => {
     fetch(`${API}/api/poster-templates`, {
@@ -53,6 +59,29 @@ export default function MyProfile({ agent, token, onUpdate }) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleChangeEmail = async (e) => {
+    e.preventDefault();
+    setEmailSaving(true); setEmailError(''); setEmailSuccess('');
+    try {
+      const res = await fetch(`${API}/api/profile/change-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ new_email: newEmail, current_password: emailPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Could not change email');
+      onUpdate(data);
+      setEmailSuccess('Email updated successfully.');
+      setChangingEmail(false);
+      setNewEmail('');
+      setEmailPassword('');
+    } catch (err) {
+      setEmailError(err.message);
+    } finally {
+      setEmailSaving(false);
     }
   };
 
@@ -239,6 +268,70 @@ export default function MyProfile({ agent, token, onUpdate }) {
             </div>
           </div>
         )}
+
+        <div className="divider" />
+        <div className="section-label">Account Email</div>
+        <div className="form-group">
+          {!changingEmail ? (
+            <>
+              <div style={{ fontSize: '13px', color: 'rgba(248,244,236,0.7)', marginBottom: '10px' }}>
+                {agent.email}
+              </div>
+              <button
+                type="button"
+                className="btn-gold"
+                style={{ maxWidth: '200px' }}
+                onClick={() => { setChangingEmail(true); setEmailError(''); setEmailSuccess(''); setNewEmail(''); setEmailPassword(''); }}
+              >
+                Change Email
+              </button>
+            </>
+          ) : (
+            <div>
+              <div className="form-group">
+                <label className="form-label">New Email</label>
+                <input
+                  className="form-input"
+                  type="email"
+                  value={newEmail}
+                  onChange={e => setNewEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Current Password</label>
+                <input
+                  className="form-input"
+                  type="password"
+                  value={emailPassword}
+                  onChange={e => setEmailPassword(e.target.value)}
+                  required
+                />
+              </div>
+              {emailError && <div className="error-msg">{emailError}</div>}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={emailSaving}
+                  onClick={handleChangeEmail}
+                  style={{ maxWidth: '200px' }}
+                >
+                  {emailSaving ? 'Saving...' : 'Save New Email'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-gold"
+                  style={{ maxWidth: '120px' }}
+                  onClick={() => { setChangingEmail(false); setEmailError(''); }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+          {emailSuccess && <div className="success-msg">{emailSuccess}</div>}
+        </div>
 
         <div className="divider" />
         <div className="section-label">My Writing Style</div>
