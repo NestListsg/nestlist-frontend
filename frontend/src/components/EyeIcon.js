@@ -1,6 +1,7 @@
 import React from 'react';
 
-export default function EyeIcon({ open, onClick, style }) {
+export default function EyeIcon({ open, onClick, style, size = 26 }) {
+  const iconSize = Math.round(size * 0.6);
   return (
     <span
       onClick={onClick}
@@ -8,8 +9,8 @@ export default function EyeIcon({ open, onClick, style }) {
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        width: '26px',
-        height: '26px',
+        width: `${size}px`,
+        height: `${size}px`,
         borderRadius: '50%',
         background: 'rgba(20,20,20,0.55)',
         color: '#D4AF37',
@@ -17,12 +18,12 @@ export default function EyeIcon({ open, onClick, style }) {
       }}
     >
       {open ? (
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+        <svg viewBox="0 0 24 24" width={iconSize} height={iconSize} fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
           <circle cx="12" cy="12" r="3" />
         </svg>
       ) : (
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+        <svg viewBox="0 0 24 24" width={iconSize} height={iconSize} fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
           <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a13.16 13.16 0 0 1-1.67 2.68" />
           <path d="M6.61 6.61A13.526 13.526 0 0 0 1 12s4 8 11 8a9.26 9.26 0 0 0 5.39-1.61" />
           <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />

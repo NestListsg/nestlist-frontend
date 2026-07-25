@@ -317,7 +317,7 @@ export default function MyProfile({ agent, token, onUpdate }) {
                     style={{paddingRight:'40px'}}
                     required
                   />
-                  <EyeIcon open={showEmailPassword} onClick={() => setShowEmailPassword(v => !v)} style={eyeStyle} />
+                  <EyeIcon open={showEmailPassword} onClick={() => setShowEmailPassword(v => !v)} style={eyeStyle} size={20} />
                 </div>
               </div>
               {emailError && <div className="error-msg">{emailError}</div>}
