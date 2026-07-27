@@ -253,26 +253,45 @@ export default function MyProfile({ agent, token, onUpdate }) {
         {posterTemplates.length > 0 && (
           <div className="form-group">
             <label className="form-label">Poster Style</label>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              {posterTemplates.map(t => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => set('poster_template_id', t.id)}
-                  style={{
-                    background: form.poster_template_id === t.id ? 'rgba(212,175,55,0.2)' : 'transparent',
-                    border: `2px solid ${form.poster_template_id === t.id ? '#D4AF37' : 'rgba(212,175,55,0.25)'}`,
-                    borderRadius: '4px',
-                    padding: '10px 16px',
-                    cursor: 'pointer',
-                    color: form.poster_template_id === t.id ? '#F0C84A' : 'rgba(248,244,236,0.7)',
-                    fontSize: '13px',
-                    fontFamily: "'Montserrat', sans-serif"
-                  }}
-                >
-                  {t.name}
-                </button>
-              ))}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '12px' }}>
+              {posterTemplates.map(t => {
+                const selected = form.poster_template_id === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => set('poster_template_id', t.id)}
+                    style={{
+                      background: 'transparent',
+                      border: `2px solid ${selected ? '#D4AF37' : 'rgba(212,175,55,0.25)'}`,
+                      borderRadius: '6px',
+                      padding: '6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px'
+                    }}
+                  >
+                    {t.thumbnail_url ? (
+                      <img
+                        src={t.thumbnail_url}
+                        alt={t.name}
+                        style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'cover', borderRadius: '3px', display: 'block' }}
+                      />
+                    ) : (
+                      <div style={{ width: '100%', aspectRatio: '4 / 5', borderRadius: '3px', background: 'rgba(212,175,55,0.1)' }} />
+                    )}
+                    <span style={{
+                      color: selected ? '#F0C84A' : 'rgba(248,244,236,0.7)',
+                      fontSize: '12px',
+                      fontFamily: "'Montserrat', sans-serif",
+                      textAlign: 'center'
+                    }}>
+                      {t.name}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
