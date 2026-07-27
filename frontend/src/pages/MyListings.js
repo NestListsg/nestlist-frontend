@@ -213,6 +213,8 @@ export default function MyListings({ agent, token, onEdit }) {
   const [igPosting, setIgPosting] = useState({});
   const [igPostError, setIgPostError] = useState({});
   const [igPostSuccess, setIgPostSuccess] = useState({});
+  const [posterTemplates, setPosterTemplates] = useState([]);
+  const [posterTemplateChoice, setPosterTemplateChoice] = useState({});
 
   useEffect(() => {
     fetch(`${API}/api/listings`, {
@@ -222,6 +224,18 @@ export default function MyListings({ agent, token, onEdit }) {
       .then(data => setListings(Array.isArray(data) ? data : []))
       .catch(() => setListings([]));
   }, [token]);
+
+  useEffect(() => {
+    fetch(`${API}/api/poster-templates`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(data => setPosterTemplates(Array.isArray(data) ? data : []))
+      .catch(() => setPosterTemplates([]));
+  }, [token]);
+
+  const selectedTemplateFor = (listing) =>
+    posterTemplateChoice[listing.id] || listing.poster_template_id || agent.poster_template_id || 'editorial';
 
   const handleCopy = (listingId, platform, text) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -295,13 +309,14 @@ export default function MyListings({ agent, token, onEdit }) {
     setPosterError(e => ({ ...e, [listing.id]: '' }));
     try {
       const photoIndex = posterPhotoIndex[listing.id] || 0;
-      const res = await fetch(`${API}/api/listings/${listing.id}/generate-poster?photo_index=${photoIndex}`, {
+      const templateId = selectedTemplateFor(listing);
+      const res = await fetch(`${API}/api/listings/${listing.id}/generate-poster?photo_index=${photoIndex}&template_id=${templateId}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed to generate poster');
-      setListings(prev => prev.map(l => l.id === listing.id ? { ...l, poster_url: data.poster_url } : l));
+      setListings(prev => prev.map(l => l.id === listing.id ? { ...l, poster_url: data.poster_url, poster_template_id: data.poster_template_id } : l));
     } catch (err) {
       setPosterError(e => ({ ...e, [listing.id]: err.message }));
     } finally {
@@ -506,6 +521,41 @@ export default function MyListings({ agent, token, onEdit }) {
                   <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '10px' }}>
                     Branded poster for your post/story. Click a photo above (marked ★ POSTER) to choose the background.
                   </div>
+
+                  {posterTemplates.length > 0 && (
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                      {posterTemplates.map(t => {
+                        const selected = selectedTemplateFor(l) === t.id;
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => setPosterTemplateChoice(c => ({ ...c, [l.id]: t.id }))}
+                            title={t.name}
+                            style={{
+                              background: 'transparent',
+                              border: `2px solid ${selected ? '#D4AF37' : 'rgba(212,175,55,0.25)'}`,
+                              borderRadius: '4px',
+                              padding: '3px',
+                              cursor: 'pointer',
+                              width: '52px'
+                            }}
+                          >
+                            {t.thumbnail_url ? (
+                              <img
+                                src={t.thumbnail_url}
+                                alt={t.name}
+                                style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'cover', borderRadius: '2px', display: 'block' }}
+                              />
+                            ) : (
+                              <div style={{ width: '100%', aspectRatio: '4 / 5', borderRadius: '2px', background: 'rgba(212,175,55,0.1)' }} />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {l.poster_url && (
                     <div style={{ marginBottom: '10px' }}>
                       <img
