@@ -523,7 +523,7 @@ export default function MyListings({ agent, token, onEdit }) {
                   </div>
 
                   {posterTemplates.length > 0 && (
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px', marginBottom: '12px', maxWidth: '760px' }}>
                       {posterTemplates.map(t => {
                         const selected = selectedTemplateFor(l) === t.id;
                         return (
@@ -531,25 +531,34 @@ export default function MyListings({ agent, token, onEdit }) {
                             key={t.id}
                             type="button"
                             onClick={() => setPosterTemplateChoice(c => ({ ...c, [l.id]: t.id }))}
-                            title={t.name}
                             style={{
                               background: 'transparent',
                               border: `2px solid ${selected ? '#D4AF37' : 'rgba(212,175,55,0.25)'}`,
-                              borderRadius: '4px',
-                              padding: '3px',
+                              borderRadius: '5px',
+                              padding: '5px',
                               cursor: 'pointer',
-                              width: '52px'
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '5px'
                             }}
                           >
                             {t.thumbnail_url ? (
                               <img
                                 src={t.thumbnail_url}
                                 alt={t.name}
-                                style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'cover', borderRadius: '2px', display: 'block' }}
+                                style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'cover', borderRadius: '3px', display: 'block' }}
                               />
                             ) : (
-                              <div style={{ width: '100%', aspectRatio: '4 / 5', borderRadius: '2px', background: 'rgba(212,175,55,0.1)' }} />
+                              <div style={{ width: '100%', aspectRatio: '4 / 5', borderRadius: '3px', background: 'rgba(212,175,55,0.1)' }} />
                             )}
+                            <span style={{
+                              color: selected ? '#F0C84A' : 'rgba(248,244,236,0.7)',
+                              fontSize: '11px',
+                              textAlign: 'center',
+                              lineHeight: '1.2'
+                            }}>
+                              {t.name}
+                            </span>
                           </button>
                         );
                       })}
