@@ -737,6 +737,12 @@ export default function MyListings({ agent, token, onEdit }) {
                       {generateCaption(l, p.key, getCaptionStyle(l.id))}
                     </div>
 
+                    {p.key !== 'whatsapp' && (
+                      <div style={{ fontSize: '11px', color: 'rgba(248,244,236,0.5)', marginBottom: '10px' }}>
+                        1. Copy the caption above &nbsp;→&nbsp; 2. Click below to open {p.label} &nbsp;→&nbsp; 3. Paste it into a new post and attach your photos there.
+                      </div>
+                    )}
+
                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                       <button
                         className="btn-primary"
@@ -781,7 +787,7 @@ export default function MyListings({ agent, token, onEdit }) {
                           alignItems: 'center'
                         }}
                       >
-                        {p.key === 'whatsapp' ? `${p.emoji} Share via WhatsApp` : `${p.emoji} Open ${p.label}`}
+                        {p.key === 'whatsapp' ? `${p.emoji} Share via WhatsApp` : `${p.emoji} Go to ${p.label} & Paste`}
                       </a>
                     </div>
 
