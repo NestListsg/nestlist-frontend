@@ -190,6 +190,14 @@ const PLATFORMS = [
   { key: 'tiktok', label: 'TikTok', emoji: '🎵', url: 'https://www.tiktok.com/upload' },
 ];
 
+// wa.me pre-fills the message text (caption + listing link) so agents land in a
+// ready-to-send chat instead of a blank WhatsApp Web tab they have to paste into.
+function buildWhatsAppShareUrl(listing, caption) {
+  const listingUrl = `https://nestlist.sg/l/${listing.id}`;
+  const message = caption ? `${caption}\n\n${listingUrl}` : listingUrl;
+  return `https://wa.me/?text=${encodeURIComponent(message)}`;
+}
+
 const STYLES = [
   { key: 'long', label: '📖 Full Story' },
   { key: 'tldr', label: '⚡ Quick Summary' },
@@ -699,7 +707,7 @@ export default function MyListings({ agent, token, onEdit }) {
                       )}
 
                       <a
-                        href={p.url}
+                        href={p.key === 'whatsapp' ? buildWhatsAppShareUrl(l, generateCaption(l, p.key, getCaptionStyle(l.id))) : p.url}
                         target="_blank"
                         rel="noreferrer"
                         style={{
@@ -715,7 +723,7 @@ export default function MyListings({ agent, token, onEdit }) {
                           alignItems: 'center'
                         }}
                       >
-                        {p.emoji} Open {p.label}
+                        {p.key === 'whatsapp' ? `${p.emoji} Share via WhatsApp` : `${p.emoji} Open ${p.label}`}
                       </a>
                     </div>
 
