@@ -7,6 +7,18 @@ const emptyForm = {
   budget: '', property_interest: '', notes: '', status: 'Active'
 };
 
+// Buyer contact goes straight from agent to buyer -- a wa.me deep link opens the
+// agent's own WhatsApp, no NestList number or API involved. Singapore mobile
+// numbers are 8 digits; wa.me needs the country code, so add 65 when it's missing.
+function buildBuyerWhatsAppUrl(enq) {
+  const digits = (enq.phone || '').replace(/\D/g, '');
+  if (!digits) return null;
+  const withCountryCode = digits.length === 8 ? `65${digits}` : digits;
+  const greeting = `Hi ${enq.client_name || 'there'}, thanks for your enquiry` +
+    (enq.property_interest ? ` about ${enq.property_interest}` : '') + '!';
+  return `https://wa.me/${withCountryCode}?text=${encodeURIComponent(greeting)}`;
+}
+
 export default function Enquiries({ agent, token }) {
   const [enquiries, setEnquiries] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -199,7 +211,28 @@ export default function Enquiries({ agent, token }) {
                   <span style={{color:'rgba(248,244,236,0.5)'}}>AI Summary: </span>{enq.ai_summary}
                 </div>
               )}
-              {enq.phone && <div style={{marginBottom:'8px', fontSize:'13px'}}><span style={{color:'rgba(248,244,236,0.5)'}}>Phone: </span>{enq.phone}</div>}
+              {enq.phone && (
+                <div style={{marginBottom:'8px', fontSize:'13px', display:'flex', alignItems:'center', gap:'10px', flexWrap:'wrap'}}>
+                  <span><span style={{color:'rgba(248,244,236,0.5)'}}>Phone: </span>{enq.phone}</span>
+                  {buildBuyerWhatsAppUrl(enq) && (
+                    <a
+                      href={buildBuyerWhatsAppUrl(enq)}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        color: '#25D366',
+                        border: '1px solid rgba(37,211,102,0.4)',
+                        borderRadius: '3px',
+                        padding: '3px 10px',
+                        fontSize: '12px',
+                        textDecoration: 'none'
+                      }}
+                    >
+                      💬 Message on WhatsApp
+                    </a>
+                  )}
+                </div>
+              )}
               {enq.email && <div style={{marginBottom:'8px', fontSize:'13px'}}><span style={{color:'rgba(248,244,236,0.5)'}}>Email: </span>{enq.email}</div>}
               {enq.budget && <div style={{marginBottom:'8px', fontSize:'13px'}}><span style={{color:'rgba(248,244,236,0.5)'}}>Budget: </span>SGD {enq.budget}</div>}
               {enq.property_interest && <div style={{marginBottom:'8px', fontSize:'13px'}}><span style={{color:'rgba(248,244,236,0.5)'}}>Interest: </span>{enq.property_interest}</div>}
