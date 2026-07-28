@@ -296,6 +296,27 @@ export default function MyListings({ agent, token, onEdit }) {
     }
   };
 
+  // Poster/photo URLs point at Supabase Storage (a different origin from the app),
+  // so a plain <a download> is silently ignored by the browser and just opens the
+  // image instead of saving it. Fetching as a blob first sidesteps that.
+  const handleDownloadFile = async (url, filename) => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      window.open(url, '_blank');
+    }
+  };
+
   const handleWebShare = async (listing, platform, caption) => {
     if (!navigator.share) {
       alert('Web sharing is not supported on this browser. Please use Copy Caption instead.');
@@ -397,7 +418,14 @@ export default function MyListings({ agent, token, onEdit }) {
     }
   };
 
-  const getActivePlatform = (listingId) => activePlatform[listingId] || 'facebook';
+  const getSelectedPlatforms = (listingId) => activePlatform[listingId] || ['facebook'];
+  const togglePlatform = (listingId, key) => {
+    setActivePlatform(a => {
+      const current = a[listingId] || ['facebook'];
+      const next = current.includes(key) ? current.filter(k => k !== key) : [...current, key];
+      return { ...a, [listingId]: next };
+    });
+  };
   const getCaptionStyle = (listingId) => captionStyle[listingId] || 'long';
   const canWebShare = !!navigator.share;
 
@@ -493,20 +521,18 @@ export default function MyListings({ agent, token, onEdit }) {
                           >
                             ×
                           </button>
-                          <a
-                            href={url}
-                            download
-                            target="_blank"
-                            rel="noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadFile(url, `${l.id.slice(0, 8)}-photo-${i + 1}.jpg`)}
                             style={{
                               position: 'absolute', bottom: '4px', right: '4px',
                               background: 'rgba(0,0,0,0.6)', color: '#F0C84A',
-                              borderRadius: '3px', fontSize: '10px', padding: '2px 6px',
-                              textDecoration: 'none'
+                              border: 'none', borderRadius: '3px', fontSize: '10px', padding: '2px 6px',
+                              cursor: 'pointer'
                             }}
                           >
                             ⬇ Save
-                          </a>
+                          </button>
                         </div>
                       );
                     })}
@@ -617,11 +643,9 @@ export default function MyListings({ agent, token, onEdit }) {
                       {posterLoading[l.id] ? 'Generating...' : l.poster_url ? '🖼️ Regenerate Poster' : '🖼️ Generate Poster'}
                     </button>
                     {l.poster_url && (
-                      <a
-                        href={l.poster_url}
-                        download
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadFile(l.poster_url, `${l.id.slice(0, 8)}-poster.jpg`)}
                         style={{
                           background: 'transparent',
                           border: '1px solid rgba(212,175,55,0.4)',
@@ -630,11 +654,11 @@ export default function MyListings({ agent, token, onEdit }) {
                           borderRadius: '3px',
                           fontSize: '12px',
                           fontFamily: "'Montserrat', sans-serif",
-                          textDecoration: 'none'
+                          cursor: 'pointer'
                         }}
                       >
                         ⬇ Download
-                      </a>
+                      </button>
                     )}
                   </div>
                   {posterError[l.id] && (
@@ -642,26 +666,32 @@ export default function MyListings({ agent, token, onEdit }) {
                   )}
                 </div>
 
+                <div style={{ fontSize: '11px', color: 'rgba(248,244,236,0.4)', marginBottom: '6px' }}>
+                  Tap to select one or more platforms — each shows its own caption below.
+                </div>
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                  {PLATFORMS.map(p => (
-                    <button
-                      key={p.key}
-                      onClick={() => setActivePlatform(a => ({ ...a, [l.id]: p.key }))}
-                      style={{
-                        background: getActivePlatform(l.id) === p.key ? 'rgba(212,175,55,0.25)' : 'transparent',
-                        border: `1px solid ${getActivePlatform(l.id) === p.key ? '#D4AF37' : 'rgba(212,175,55,0.3)'}`,
-                        color: getActivePlatform(l.id) === p.key ? '#F0C84A' : 'rgba(248,244,236,0.6)',
-                        padding: '6px 14px',
-                        borderRadius: '3px',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        fontFamily: "'Montserrat', sans-serif",
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      {p.emoji} {p.label}
-                    </button>
-                  ))}
+                  {PLATFORMS.map(p => {
+                    const selected = getSelectedPlatforms(l.id).includes(p.key);
+                    return (
+                      <button
+                        key={p.key}
+                        onClick={() => togglePlatform(l.id, p.key)}
+                        style={{
+                          background: selected ? 'rgba(212,175,55,0.25)' : 'transparent',
+                          border: `1px solid ${selected ? '#D4AF37' : 'rgba(212,175,55,0.3)'}`,
+                          color: selected ? '#F0C84A' : 'rgba(248,244,236,0.6)',
+                          padding: '6px 14px',
+                          borderRadius: '3px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontFamily: "'Montserrat', sans-serif",
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {selected ? '✓ ' : ''}{p.emoji} {p.label}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
@@ -686,8 +716,11 @@ export default function MyListings({ agent, token, onEdit }) {
                   ))}
                 </div>
 
-                {PLATFORMS.map(p => getActivePlatform(l.id) === p.key && (
-                  <div key={p.key}>
+                {PLATFORMS.filter(p => getSelectedPlatforms(l.id).includes(p.key)).map(p => (
+                  <div key={p.key} style={{ marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid rgba(212,175,55,0.12)' }}>
+                    <div style={{ fontSize: '12px', color: '#F0C84A', fontWeight: 'bold', marginBottom: '8px' }}>
+                      {p.emoji} {p.label}
+                    </div>
                     <div style={{
                       background: 'rgba(0,0,0,0.3)',
                       border: '1px solid rgba(212,175,55,0.2)',
