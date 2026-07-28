@@ -11,6 +11,7 @@ import MyProfile from './pages/MyProfile';
 import Billing from './pages/Billing';
 import PublicListing from './pages/PublicListing';
 import InstagramCallback from './pages/InstagramCallback';
+import FacebookCallback from './pages/FacebookCallback';
 import ResetPassword from './pages/ResetPassword';
 
 const LOGO = '/logo_2.png';
@@ -150,6 +151,7 @@ function App() {
       <Routes>
         <Route path="/l/:listingId" element={<PublicListing />} />
         <Route path="/auth/instagram/callback" element={<InstagramCallback />} />
+        <Route path="/auth/facebook/callback" element={<FacebookCallback />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<AuthenticatedApp />} />
       </Routes>

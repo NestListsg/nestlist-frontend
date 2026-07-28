@@ -23,6 +23,8 @@ export default function MyProfile({ agent, token, onUpdate }) {
   const [pollError, setPollError] = useState('');
   const [igConnecting, setIgConnecting] = useState(false);
   const [igConnectError, setIgConnectError] = useState('');
+  const [fbConnecting, setFbConnecting] = useState(false);
+  const [fbConnectError, setFbConnectError] = useState('');
   const [photoUrl, setPhotoUrl] = useState(agent.photo_url || '');
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState('');
@@ -149,6 +151,21 @@ export default function MyProfile({ agent, token, onUpdate }) {
     } catch (err) {
       setIgConnectError(err.message);
       setIgConnecting(false);
+    }
+  };
+
+  const handleConnectFacebook = async () => {
+    setFbConnecting(true); setFbConnectError('');
+    try {
+      const res = await fetch(`${API}/api/profile/facebook-connect-link`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Could not get connect link');
+      window.location.href = data.link;
+    } catch (err) {
+      setFbConnectError(err.message);
+      setFbConnecting(false);
     }
   };
 
@@ -456,6 +473,27 @@ export default function MyProfile({ agent, token, onUpdate }) {
                   {igConnecting ? 'Redirecting to Instagram...' : 'Connect Instagram'}
                 </button>
                 {igConnectError && <div className="error-msg">{igConnectError}</div>}
+              </>
+            )}
+          </div>
+        )}
+
+        {agent.can_use_facebook_beta && (
+          <div className="form-group">
+            {agent.fb_page_name ? (
+              <div className="success-msg">Connected to {agent.fb_page_name} on Facebook.</div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="btn-gold"
+                  style={{ maxWidth: '280px' }}
+                  onClick={handleConnectFacebook}
+                  disabled={fbConnecting}
+                >
+                  {fbConnecting ? 'Redirecting to Facebook...' : 'Connect Facebook'}
+                </button>
+                {fbConnectError && <div className="error-msg">{fbConnectError}</div>}
               </>
             )}
           </div>

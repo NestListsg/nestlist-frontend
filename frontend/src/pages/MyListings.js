@@ -221,6 +221,10 @@ export default function MyListings({ agent, token, onEdit }) {
   const [igPosting, setIgPosting] = useState({});
   const [igPostError, setIgPostError] = useState({});
   const [igPostSuccess, setIgPostSuccess] = useState({});
+  const [fbCaption, setFbCaption] = useState({});
+  const [fbPosting, setFbPosting] = useState({});
+  const [fbPostError, setFbPostError] = useState({});
+  const [fbPostSuccess, setFbPostSuccess] = useState({});
   const [posterTemplates, setPosterTemplates] = useState([]);
   const [posterTemplateChoice, setPosterTemplateChoice] = useState({});
 
@@ -369,6 +373,27 @@ export default function MyListings({ agent, token, onEdit }) {
       setIgPostError(e => ({ ...e, [listing.id]: err.message }));
     } finally {
       setIgPosting(p => ({ ...p, [listing.id]: false }));
+    }
+  };
+
+  const handlePostFacebook = async (listing) => {
+    const caption = fbCaption[listing.id] ?? generateCaption(listing, 'facebook', getCaptionStyle(listing.id));
+    setFbPosting(p => ({ ...p, [listing.id]: true }));
+    setFbPostError(e => ({ ...e, [listing.id]: '' }));
+    setFbPostSuccess(s => ({ ...s, [listing.id]: '' }));
+    try {
+      const res = await fetch(`${API}/api/listings/${listing.id}/post-facebook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ caption })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to post to Facebook');
+      setFbPostSuccess(s => ({ ...s, [listing.id]: '🚀 Posted to Facebook!' }));
+    } catch (err) {
+      setFbPostError(e => ({ ...e, [listing.id]: err.message }));
+    } finally {
+      setFbPosting(p => ({ ...p, [listing.id]: false }));
     }
   };
 
@@ -752,6 +777,34 @@ export default function MyListings({ agent, token, onEdit }) {
                         </div>
                         {igPostError[l.id] && <div className="error-msg">{igPostError[l.id]}</div>}
                         {igPostSuccess[l.id] && <div className="success-msg">{igPostSuccess[l.id]}</div>}
+                      </div>
+                    )}
+
+                    {p.key === 'facebook' && agent.can_use_facebook_beta && agent.fb_page_name && (
+                      <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(212,175,55,0.15)' }}>
+                        <label className="form-label">Post directly to Facebook ({agent.fb_page_name})</label>
+                        <textarea
+                          className="form-textarea"
+                          rows={4}
+                          value={fbCaption[l.id] ?? generateCaption(l, 'facebook', getCaptionStyle(l.id))}
+                          onChange={e => setFbCaption(c => ({ ...c, [l.id]: e.target.value }))}
+                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="btn-gold"
+                            style={{ maxWidth: '220px' }}
+                            onClick={() => handlePostFacebook(l)}
+                            disabled={fbPosting[l.id] || !l.poster_url}
+                          >
+                            {fbPosting[l.id] ? 'Posting...' : '🚀 Post to Facebook'}
+                          </button>
+                          {!l.poster_url && (
+                            <span style={{ fontSize: '11px', color: 'rgba(248,244,236,0.5)' }}>Generate a poster above first</span>
+                          )}
+                        </div>
+                        {fbPostError[l.id] && <div className="error-msg">{fbPostError[l.id]}</div>}
+                        {fbPostSuccess[l.id] && <div className="success-msg">{fbPostSuccess[l.id]}</div>}
                       </div>
                     )}
                   </div>
