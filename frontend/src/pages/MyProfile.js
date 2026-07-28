@@ -11,7 +11,9 @@ export default function MyProfile({ agent, token, onUpdate }) {
     emphasis: agent.emphasis || 'Lifestyle & Prestige',
     signature: agent.signature || 'Where your next chapter begins.',
     poster_color: agent.poster_color || '#1a1a5c',
-    poster_template_id: agent.poster_template_id || 'editorial'
+    poster_template_id: agent.poster_template_id || 'editorial',
+    notification_channel: agent.notification_channel || 'telegram',
+    whatsapp_number: agent.whatsapp_number || ''
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -414,6 +416,29 @@ export default function MyProfile({ agent, token, onUpdate }) {
             </>
           )}
         </div>
+
+        <div className="form-group">
+          <label className="form-label">Send New Lead Alerts Via</label>
+          <select className="form-select" value={form.notification_channel} onChange={e => set('notification_channel', e.target.value)}>
+            <option value="telegram">Telegram only</option>
+            <option value="whatsapp">WhatsApp only</option>
+            <option value="both">Both Telegram and WhatsApp</option>
+          </select>
+        </div>
+        {(form.notification_channel === 'whatsapp' || form.notification_channel === 'both') && (
+          <div className="form-group">
+            <label className="form-label">Your WhatsApp Number</label>
+            <input
+              className="form-input"
+              value={form.whatsapp_number}
+              onChange={e => set('whatsapp_number', e.target.value)}
+              placeholder="e.g. +65 9123 4567"
+            />
+            <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginTop: '4px' }}>
+              New lead alerts will be sent to this number on WhatsApp, straight from NestList — separate from the direct buyer-to-agent contact links on your Enquiries page.
+            </div>
+          </div>
+        )}
 
         {agent.can_use_instagram_beta && (
           <div className="form-group">
