@@ -281,16 +281,24 @@ export default function MyListings({ agent, token, onEdit }) {
       });
       if (!res.ok) throw new Error('Download failed');
       const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `listing-photos-${listing.id.slice(0, 8)}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      const filename = `listing-photos-${listing.id.slice(0, 8)}.zip`;
+      const file = new File([blob], filename, { type: blob.type || 'application/zip' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] });
+      } else {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      }
     } catch (err) {
-      alert('Failed to download photos. Please save images individually.');
+      if (err && err.name === 'AbortError') { /* user cancelled the share sheet */ }
+      else alert('Failed to download photos. Please save images individually.');
     } finally {
       setDownloading(d => ({ ...d, [listing.id]: false }));
     }
@@ -304,6 +312,17 @@ export default function MyListings({ agent, token, onEdit }) {
       const res = await fetch(url);
       if (!res.ok) throw new Error('Download failed');
       const blob = await res.blob();
+      const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+
+      // On phones, a synthetic <a download> click fired after an async fetch is
+      // no longer treated as a direct tap by the browser, so it silently does
+      // nothing. The native share sheet (with a "Save Image"/"Save to Photos"
+      // option) is the reliable way to save a file on mobile.
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        return;
+      }
+
       const blobUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = blobUrl;
@@ -313,6 +332,7 @@ export default function MyListings({ agent, token, onEdit }) {
       a.remove();
       window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
+      if (err && err.name === 'AbortError') return;
       window.open(url, '_blank');
     }
   };
