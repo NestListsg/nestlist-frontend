@@ -27,13 +27,6 @@ const CATEGORIES = [
       { name: 'URA Development Control Guidelines', url: 'https://www.ura.gov.sg/Corporate/Guidelines/Development-Control', desc: 'Official building and zoning rules for landed housing.' },
     ],
   },
-  {
-    title: 'Government & Market Data',
-    links: [
-      { name: 'SingStat', url: 'https://www.singstat.gov.sg', desc: 'Official Singapore economic and demographic statistics.' },
-      { name: 'HDB', url: 'https://www.hdb.gov.sg', desc: 'HDB resale portal and policies, for broader market context.' },
-    ],
-  },
 ];
 
 export default function Resources() {
