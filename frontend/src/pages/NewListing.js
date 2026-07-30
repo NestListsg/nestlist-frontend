@@ -216,8 +216,8 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   };
 
   const propertyTypes = [
-    'Good Class Bungalow (GCB)', 'Landed Bungalow', 'Semi-Detached',
-    'Terrace House', 'Penthouse', 'Ultra Luxury Investment Property'
+    'Good Class Bungalow (GCB)', 'Detached/Bungalow', 'Semi-Detached',
+    'Inter-Terrace', 'Corner Terrace', 'Penthouse'
   ];
 
   return (

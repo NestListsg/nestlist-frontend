@@ -10,7 +10,7 @@ export default function Login({ onLogin }) {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [agency, setAgency] = useState('');
-  const [specialty, setSpecialty] = useState('Landed. GCB. Penthouses. Ultra Luxury');
+  const [specialty, setSpecialty] = useState('Landed. GCB. Penthouses');
   const [password2, setPassword2] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
