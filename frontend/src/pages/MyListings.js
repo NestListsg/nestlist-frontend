@@ -204,9 +204,9 @@ const STYLES = [
   { key: 'combined', label: '📖⚡ Both' },
 ];
 
-export default function MyListings({ agent, token, onEdit }) {
+export default function MyListings({ agent, token, onEdit, listingsTab }) {
   const [listings, setListings] = useState([]);
-  const [activeTab, setActiveTab] = useState('active');
+  const activeTab = listingsTab || 'active';
   const [removingPermanently, setRemovingPermanently] = useState({});
   const [removePermanentlyError, setRemovePermanentlyError] = useState({});
   const [expanded, setExpanded] = useState(null);
@@ -475,18 +475,7 @@ export default function MyListings({ agent, token, onEdit }) {
 
   return (
     <div className="page-content">
-      <div className="page-title">My Listings</div>
-
-      <div style={{ maxWidth: '280px', marginBottom: '20px' }}>
-        <select
-          className="form-select"
-          value={activeTab}
-          onChange={e => setActiveTab(e.target.value)}
-        >
-          <option value="active">Active Listings ({activeListings.length})</option>
-          <option value="deleted">Deleted Listings ({deletedListings.length})</option>
-        </select>
-      </div>
+      <div className="page-title">{activeTab === 'deleted' ? 'My Listings — Deleted' : 'My Listings'}</div>
 
       {activeTab === 'active' && (
         activeListings.length > 0

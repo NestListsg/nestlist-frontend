@@ -16,12 +16,18 @@ import ResetPassword from './pages/ResetPassword';
 
 const LOGO = '/logo_2.png';
 
-function Sidebar({ page, setPage, agent, onLogout, isOpen, onClose }) {
+function Sidebar({ page, setPage, agent, onLogout, isOpen, onClose, listingsTab, setListingsTab }) {
   const navItems = ['Dashboard', 'New Listing', 'My Listings', 'Enquiries', 'Resources', 'My Profile', 'Billing'];
   const initials = agent?.name?.split(' ').slice(0,2).map(n => n[0]).join('').toUpperCase() || 'NL';
 
   const handleNavClick = (item) => {
     setPage(item);
+    onClose();
+  };
+
+  const handleListingsSubClick = (tab) => {
+    setListingsTab(tab);
+    setPage('My Listings');
     onClose();
   };
 
@@ -39,9 +45,32 @@ function Sidebar({ page, setPage, agent, onLogout, isOpen, onClose }) {
         </div>
         <div className="sb-nav-label">Navigation</div>
         {navItems.map(item => (
-          <button key={item} className={`sb-item ${page === item ? 'active' : ''}`} onClick={() => handleNavClick(item)}>
-            {item}
-          </button>
+          <React.Fragment key={item}>
+            <button className={`sb-item ${page === item ? 'active' : ''}`} onClick={() => handleNavClick(item)}>
+              {item}
+              {item === 'My Listings' && (
+                <span style={{ float: 'right', opacity: 0.6 }}>{page === 'My Listings' ? '▾' : '▸'}</span>
+              )}
+            </button>
+            {item === 'My Listings' && page === 'My Listings' && (
+              <>
+                <button
+                  className={`sb-item ${listingsTab === 'active' ? 'active' : ''}`}
+                  style={{ paddingLeft: '38px', fontSize: '13px' }}
+                  onClick={() => handleListingsSubClick('active')}
+                >
+                  Active Listings
+                </button>
+                <button
+                  className={`sb-item ${listingsTab === 'deleted' ? 'active' : ''}`}
+                  style={{ paddingLeft: '38px', fontSize: '13px' }}
+                  onClick={() => handleListingsSubClick('deleted')}
+                >
+                  Deleted Listings
+                </button>
+              </>
+            )}
+          </React.Fragment>
         ))}
         <div className="sb-divider" />
         <button className="sb-logout" onClick={onLogout}>Logout</button>
@@ -79,6 +108,7 @@ function AuthenticatedApp() {
   const [page, setPage] = useState('Dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [editingListing, setEditingListing] = useState(null);
+  const [listingsTab, setListingsTab] = useState('active');
 
   const handleEditListing = (listing) => {
     setEditingListing(listing);
@@ -117,7 +147,7 @@ function AuthenticatedApp() {
     switch(page) {
       case 'Dashboard': return <Dashboard agent={agent} token={token} setPage={navigateTo} />;
       case 'New Listing': return <NewListing agent={agent} token={token} editingListing={editingListing} onDoneEditing={() => { setEditingListing(null); setPage('My Listings'); }} />;
-      case 'My Listings': return <MyListings agent={agent} token={token} onEdit={handleEditListing} />;
+      case 'My Listings': return <MyListings agent={agent} token={token} onEdit={handleEditListing} listingsTab={listingsTab} />;
       case 'Enquiries': return <Enquiries agent={agent} token={token} />;
       case 'Resources': return <Resources />;
       case 'My Profile': return <MyProfile agent={agent} token={token} onUpdate={updateAgent} />;
@@ -136,6 +166,8 @@ function AuthenticatedApp() {
         onLogout={handleLogout}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        listingsTab={listingsTab}
+        setListingsTab={setListingsTab}
       />
       <div className="main">
         <Header agent={agent} />
