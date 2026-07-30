@@ -477,27 +477,15 @@ export default function MyListings({ agent, token, onEdit }) {
     <div className="page-content">
       <div className="page-title">My Listings</div>
 
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid rgba(212,175,55,0.2)' }}>
-        {[{ key: 'active', label: `Active Listings (${activeListings.length})` }, { key: 'deleted', label: `Deleted Listings (${deletedListings.length})` }].map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              borderBottom: `2px solid ${activeTab === tab.key ? '#D4AF37' : 'transparent'}`,
-              color: activeTab === tab.key ? '#F0C84A' : 'rgba(248,244,236,0.55)',
-              padding: '10px 16px',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontFamily: "'Montserrat', sans-serif",
-              fontWeight: activeTab === tab.key ? 600 : 400,
-              letterSpacing: '0.04em'
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div style={{ maxWidth: '280px', marginBottom: '20px' }}>
+        <select
+          className="form-select"
+          value={activeTab}
+          onChange={e => setActiveTab(e.target.value)}
+        >
+          <option value="active">Active Listings ({activeListings.length})</option>
+          <option value="deleted">Deleted Listings ({deletedListings.length})</option>
+        </select>
       </div>
 
       {activeTab === 'active' && (
