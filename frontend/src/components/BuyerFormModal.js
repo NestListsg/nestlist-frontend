@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { millionsToFullNumber, fullNumberToMillions } from '../utils/format';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -48,7 +49,8 @@ export default function BuyerFormModal({ token, buyer, onClose, onSaved }) {
     name: buyer.name || '', phone: buyer.phone || '', email: buyer.email || '',
     temperature: buyer.temperature || 'WARM', status: buyer.status || 'new',
     contact_date: buyer.contact_date || '', contact_via: buyer.contact_via || '',
-    budget_min: buyer.budget_min || '', budget_max: buyer.budget_max || '',
+    budget_min: buyer.budget_min ? fullNumberToMillions(buyer.budget_min) : '',
+    budget_max: buyer.budget_max ? fullNumberToMillions(buyer.budget_max) : '',
     timeline: buyer.timeline || '', districts: buyer.districts || '',
     property_types: buyer.property_types || '', land_min: buyer.land_min || '',
     tenure_pref: buyer.tenure_pref || '', buying_for: buyer.buying_for || '',
@@ -78,8 +80,8 @@ export default function BuyerFormModal({ token, buyer, onClose, onSaved }) {
     setSaving(true); setError('');
     const payload = {
       ...form,
-      budget_min: form.budget_min ? Number(form.budget_min) : 0,
-      budget_max: form.budget_max ? Number(form.budget_max) : 0,
+      budget_min: form.budget_min ? Number(millionsToFullNumber(form.budget_min)) : 0,
+      budget_max: form.budget_max ? Number(millionsToFullNumber(form.budget_max)) : 0,
       land_min: form.land_min ? Number(form.land_min) : 0,
     };
     try {

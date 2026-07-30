@@ -8,3 +8,21 @@ export function formatPriceM(price) {
   const millions = (num / 1_000_000).toFixed(2).replace(/\.?0+$/, '');
   return `${millions}M`;
 }
+
+// Price input fields are entered/displayed in millions (e.g. "25.7") but
+// stored and used everywhere else as the full raw number, so values convert
+// at the two boundaries: loading a stored value into a form, and submitting
+// a form back to the API.
+export function millionsToFullNumber(value) {
+  if (!value) return '';
+  const cleaned = String(value).replace(/,/g, '').replace(/m$/i, '').trim();
+  const num = parseFloat(cleaned);
+  if (isNaN(num)) return '';
+  return String(Math.round(num * 1_000_000));
+}
+
+export function fullNumberToMillions(value) {
+  if (!value) return '';
+  const formatted = formatPriceM(value);
+  return formatted.endsWith('M') ? formatted.slice(0, -1) : formatted;
+}

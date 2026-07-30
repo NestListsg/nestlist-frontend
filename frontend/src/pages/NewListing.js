@@ -1,26 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { formatPriceM } from '../utils/format';
+import { millionsToFullNumber, fullNumberToMillions } from '../utils/format';
 
 const API = process.env.REACT_APP_API_URL || '';
 const STORAGE_KEY = 'nestlist_new_listing_form';
-
-// The price field is entered/displayed in millions (e.g. "25.7") but stored
-// and used everywhere else (poster, captions, compliance checks) as the full
-// raw number, so it converts at the two boundaries: loading an existing
-// listing into the form, and submitting the form back to the API.
-function millionsToFullNumber(value) {
-  if (!value) return '';
-  const cleaned = String(value).replace(/,/g, '').replace(/m$/i, '').trim();
-  const num = parseFloat(cleaned);
-  if (isNaN(num)) return '';
-  return String(Math.round(num * 1_000_000));
-}
-
-function fullNumberToMillions(value) {
-  if (!value) return '';
-  const formatted = formatPriceM(value);
-  return formatted.endsWith('M') ? formatted.slice(0, -1) : formatted;
-}
 
 const DEFAULT_FORM = {
   property_type: 'Good Class Bungalow (GCB)', location: '', land_size: 0,

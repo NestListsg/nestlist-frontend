@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { formatPriceM } from '../utils/format';
+import { formatPriceM, millionsToFullNumber, fullNumberToMillions } from '../utils/format';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -16,7 +16,8 @@ export default function PropertyFormModal({ token, buyerId, kind, entry, onClose
   const [form, setForm] = useState({
     listing_id: entry?.listing_id || '',
     address: entry?.address || '',
-    price: entry?.price ? String(entry.price) : '',
+    rawPrice: entry?.price || 0,
+    priceMillions: entry?.price && !entry?.listing_id ? fullNumberToMillions(entry.price) : '',
     date: entry?.date || '',
     agent_name: entry?.agent_name || '',
     interest: entry?.interest || '',
@@ -37,7 +38,7 @@ export default function PropertyFormModal({ token, buyerId, kind, entry, onClose
     const l = listings.find(x => x.id === id);
     if (l) {
       set('address', l.location || '');
-      set('price', l.price ? String(l.price) : '');
+      set('rawPrice', l.price || 0);
     }
   };
 
@@ -45,10 +46,11 @@ export default function PropertyFormModal({ token, buyerId, kind, entry, onClose
     e.preventDefault();
     if (!form.address) { setError('Property address is required.'); return; }
     setSaving(true); setError('');
+    const price = useListing ? Number(form.rawPrice) || 0 : Number(millionsToFullNumber(form.priceMillions)) || 0;
     const payload = {
       listing_id: useListing ? form.listing_id : '',
       address: form.address,
-      price: form.price ? Number(form.price) : 0,
+      price,
       kind,
       date: form.date,
       agent_name: form.agent_name,
@@ -124,7 +126,7 @@ export default function PropertyFormModal({ token, buyerId, kind, entry, onClose
           {!useListing && (
             <div className="form-group">
               <label className="form-label">Price (SGD, in Millions)</label>
-              <input className="form-input" type="number" step="0.1" value={form.price} onChange={e => set('price', e.target.value)} placeholder="e.g. 12.5" />
+              <input className="form-input" type="number" step="0.1" value={form.priceMillions} onChange={e => set('priceMillions', e.target.value)} placeholder="e.g. 12.5" />
             </div>
           )}
 
