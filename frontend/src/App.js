@@ -6,6 +6,8 @@ import Dashboard from './pages/Dashboard';
 import NewListing from './pages/NewListing';
 import MyListings from './pages/MyListings';
 import Enquiries from './pages/Enquiries';
+import Buyers from './pages/Buyers';
+import BuyerProfile from './pages/BuyerProfile';
 import Resources from './pages/Resources';
 import MyProfile from './pages/MyProfile';
 import Billing from './pages/Billing';
@@ -17,7 +19,7 @@ import ResetPassword from './pages/ResetPassword';
 const LOGO = '/logo_2.png';
 
 function Sidebar({ page, setPage, agent, onLogout, isOpen, onClose, listingsTab, setListingsTab }) {
-  const navItems = ['Dashboard', 'New Listing', 'My Listings', 'Enquiries', 'Resources', 'My Profile', 'Billing'];
+  const navItems = ['Dashboard', 'New Listing', 'My Listings', 'Enquiries', 'Buyers', 'Resources', 'My Profile', 'Billing'];
   const initials = agent?.name?.split(' ').slice(0,2).map(n => n[0]).join('').toUpperCase() || 'NL';
 
   const handleNavClick = (item) => {
@@ -109,6 +111,7 @@ function AuthenticatedApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [editingListing, setEditingListing] = useState(null);
   const [listingsTab, setListingsTab] = useState('active');
+  const [selectedBuyerId, setSelectedBuyerId] = useState(null);
 
   const handleEditListing = (listing) => {
     setEditingListing(listing);
@@ -117,6 +120,7 @@ function AuthenticatedApp() {
 
   const navigateTo = (p) => {
     setEditingListing(null);
+    setSelectedBuyerId(null);
     setPage(p);
   };
 
@@ -149,6 +153,9 @@ function AuthenticatedApp() {
       case 'New Listing': return <NewListing agent={agent} token={token} editingListing={editingListing} onDoneEditing={() => { setEditingListing(null); setPage('My Listings'); }} />;
       case 'My Listings': return <MyListings agent={agent} token={token} onEdit={handleEditListing} listingsTab={listingsTab} />;
       case 'Enquiries': return <Enquiries agent={agent} token={token} />;
+      case 'Buyers': return selectedBuyerId
+        ? <BuyerProfile token={token} buyerId={selectedBuyerId} onBack={() => setSelectedBuyerId(null)} />
+        : <Buyers token={token} onSelectBuyer={setSelectedBuyerId} />;
       case 'Resources': return <Resources />;
       case 'My Profile': return <MyProfile agent={agent} token={token} onUpdate={updateAgent} />;
       case 'Billing': return <Billing />;
