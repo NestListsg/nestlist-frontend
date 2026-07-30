@@ -1,7 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { formatPriceM } from '../utils/format';
 
 const API = process.env.REACT_APP_API_URL || '';
 const STORAGE_KEY = 'nestlist_new_listing_form';
+
+// The price field is entered/displayed in millions (e.g. "25.7") but stored
+// and used everywhere else (poster, captions, compliance checks) as the full
+// raw number, so it converts at the two boundaries: loading an existing
+// listing into the form, and submitting the form back to the API.
+function millionsToFullNumber(value) {
+  if (!value) return '';
+  const cleaned = String(value).replace(/,/g, '').replace(/m$/i, '').trim();
+  const num = parseFloat(cleaned);
+  if (isNaN(num)) return '';
+  return String(Math.round(num * 1_000_000));
+}
+
+function fullNumberToMillions(value) {
+  if (!value) return '';
+  const formatted = formatPriceM(value);
+  return formatted.endsWith('M') ? formatted.slice(0, -1) : formatted;
+}
 
 const DEFAULT_FORM = {
   property_type: 'Good Class Bungalow (GCB)', location: '', land_size: 0,
@@ -21,7 +40,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         built_up: editingListing.built_up || 0,
         bedrooms: editingListing.bedrooms || '',
         bathrooms: editingListing.bathrooms || '',
-        price: editingListing.price || '',
+        price: editingListing.price ? fullNumberToMillions(editingListing.price) : '',
         features: editingListing.features || '',
         plot_width: editingListing.plot_width || 0,
         plot_depth: editingListing.plot_depth || 0,
@@ -114,6 +133,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       clearTimeout(timeout);
       const extracted = await response.json();
       if (!response.ok) throw new Error(extracted.detail || 'Failed to read image');
+      if (extracted.price) extracted.price = fullNumberToMillions(extracted.price);
       setForm(f => ({ ...f, ...extracted }));
       setImageSuccess(`Details extracted from ${files.length} image${files.length > 1 ? 's' : ''}! Please review and adjust if needed.`);
     } catch (err) {
@@ -194,12 +214,13 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     if (!declaration) { setError('Please tick the declaration box.'); return; }
     setPropertyTypeInvalid(false);
     setError(''); setLoading(true); setResult(null); setSaveSuccess('');
+    const payload = { ...form, price: millionsToFullNumber(form.price) };
     try {
       if (isEditing) {
         const res = await fetch(`${API}/api/listings/${editingListing.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify(form)
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Error saving listing');
@@ -210,7 +231,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       const res = await fetch(`${API}/api/listings/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(form)
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Error generating listing');
@@ -374,8 +395,8 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
               <input className="form-input" value={form.bathrooms} onChange={e => set('bathrooms', e.target.value)} placeholder="e.g. 4" />
             </div>
             <div className="form-group">
-              <label className="form-label">8. Asking Price (SGD)</label>
-              <input className="form-input" value={form.price} onChange={e => set('price', e.target.value)} placeholder="e.g. 25,700,000" required />
+              <label className="form-label">8. Asking Price (SGD, in Millions)</label>
+              <input className="form-input" value={form.price} onChange={e => set('price', e.target.value)} placeholder="e.g. 25.7" required />
             </div>
             <div className="form-group">
               <label className="form-label">9. Number of Storeys</label>
