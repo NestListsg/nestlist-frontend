@@ -206,6 +206,9 @@ const STYLES = [
 
 export default function MyListings({ agent, token, onEdit }) {
   const [listings, setListings] = useState([]);
+  const [activeTab, setActiveTab] = useState('active');
+  const [removingPermanently, setRemovingPermanently] = useState({});
+  const [removePermanentlyError, setRemovePermanentlyError] = useState({});
   const [expanded, setExpanded] = useState(null);
   const [activePlatform, setActivePlatform] = useState({});
   const [captionStyle, setCaptionStyle] = useState({});
@@ -229,7 +232,7 @@ export default function MyListings({ agent, token, onEdit }) {
   const [posterTemplateChoice, setPosterTemplateChoice] = useState({});
 
   useEffect(() => {
-    fetch(`${API}/api/listings`, {
+    fetch(`${API}/api/listings?status=all`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(r => r.json())
@@ -257,18 +260,37 @@ export default function MyListings({ agent, token, onEdit }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Move this listing to My Organiser? It will disappear from My Listings, but you can still view it -- or permanently delete it -- from My Organiser.')) return;
+    if (!window.confirm('Move this listing to Deleted Listings? It will disappear from Active Listings, but you can still view it -- or permanently delete it -- from the Deleted Listings tab.')) return;
     setDeleting(d => ({ ...d, [id]: true }));
     try {
       await fetch(`${API}/api/listings/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
-      setListings(prev => prev.filter(l => l.id !== id));
+      setListings(prev => prev.map(l => l.id === id ? { ...l, status: 'archived' } : l));
     } catch (err) {
       alert('Failed to delete listing.');
     } finally {
       setDeleting(d => ({ ...d, [id]: false }));
+    }
+  };
+
+  const handleRemovePermanently = async (id) => {
+    if (!window.confirm('Permanently delete this listing and all its photos? This cannot be undone.')) return;
+    setRemovingPermanently(r => ({ ...r, [id]: true }));
+    setRemovePermanentlyError(e => ({ ...e, [id]: '' }));
+    try {
+      const res = await fetch(`${API}/api/listings/${id}/permanent`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Failed to permanently delete listing');
+      setListings(prev => prev.filter(l => l.id !== id));
+    } catch (err) {
+      setRemovePermanentlyError(e => ({ ...e, [id]: err.message }));
+    } finally {
+      setRemovingPermanently(r => ({ ...r, [id]: false }));
     }
   };
 
@@ -448,16 +470,43 @@ export default function MyListings({ agent, token, onEdit }) {
   };
   const getCaptionStyle = (listingId) => captionStyle[listingId] || 'long';
   const canWebShare = !!navigator.share;
+  const activeListings = listings.filter(l => l.status !== 'archived');
+  const deletedListings = listings.filter(l => l.status === 'archived');
 
   return (
     <div className="page-content">
       <div className="page-title">My Listings</div>
-      {listings.length > 0
-        ? <div className="page-subtitle">You have {listings.length} listing(s).</div>
-        : <div className="page-subtitle" style={{ fontStyle: 'italic' }}>No listings yet. Go to New Listing to create your first one.</div>
-      }
 
-      {listings.map(l => (
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid rgba(212,175,55,0.2)' }}>
+        {[{ key: 'active', label: `Active Listings (${activeListings.length})` }, { key: 'deleted', label: `Deleted Listings (${deletedListings.length})` }].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              borderBottom: `2px solid ${activeTab === tab.key ? '#D4AF37' : 'transparent'}`,
+              color: activeTab === tab.key ? '#F0C84A' : 'rgba(248,244,236,0.55)',
+              padding: '10px 16px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontFamily: "'Montserrat', sans-serif",
+              fontWeight: activeTab === tab.key ? 600 : 400,
+              letterSpacing: '0.04em'
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'active' && (
+        activeListings.length > 0
+          ? <div className="page-subtitle">You have {activeListings.length} listing(s).</div>
+          : <div className="page-subtitle" style={{ fontStyle: 'italic' }}>No active listings. Go to New Listing to create your first one.</div>
+      )}
+
+      {activeTab === 'active' && activeListings.map(l => (
         <div key={l.id} className="listing-card">
           <div className="listing-card-header" onClick={() => setExpanded(expanded === l.id ? null : l.id)}>
             <div className="listing-card-title">{l.property_type} — {l.location} — SGD {l.price}</div>
@@ -869,6 +918,58 @@ export default function MyListings({ agent, token, onEdit }) {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {activeTab === 'deleted' && (
+        deletedListings.length > 0
+          ? <div className="page-subtitle">You have {deletedListings.length} deleted listing(s).</div>
+          : <div className="page-subtitle" style={{ fontStyle: 'italic' }}>Nothing here. Anything you delete from Active Listings will show up here.</div>
+      )}
+
+      {activeTab === 'deleted' && deletedListings.map(l => (
+        <div key={l.id} className="listing-card">
+          <div className="listing-card-header" onClick={() => setExpanded(expanded === l.id ? null : l.id)}>
+            <div className="listing-card-title">{l.property_type} — {l.location} — SGD {l.price}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleRemovePermanently(l.id); }}
+                disabled={removingPermanently[l.id]}
+                title="Remove permanently"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  padding: '4px',
+                  opacity: removingPermanently[l.id] ? 0.4 : 0.7,
+                  transition: 'opacity 0.2s'
+                }}
+              >
+                🗑️
+              </button>
+              <div className="listing-card-date">{l.created_at?.slice(0, 10)} {expanded === l.id ? '▲' : '▼'}</div>
+            </div>
+          </div>
+
+          {expanded === l.id && (
+            <div className="listing-card-body">
+              {removePermanentlyError[l.id] && <div className="error-msg">{removePermanentlyError[l.id]}</div>}
+              {l.images && l.images.length > 0 && (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                  {l.images.slice(0, 5).map((url, i) => (
+                    <img
+                      key={i}
+                      src={url}
+                      alt={`Property ${i + 1}`}
+                      style={{ width: '110px', height: '80px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(212,175,55,0.3)' }}
+                    />
+                  ))}
+                </div>
+              )}
+              {(l.content || '').replace(/\*\*/g, '').replace(/^#+\s/gm, '').replace(/---/g, '').trim()}
             </div>
           )}
         </div>
