@@ -87,10 +87,10 @@ export default function PricingReports({ token }) {
       </form>
 
       {report && (
-        <div>
+        <div className="print-area">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
             <div className="section-label">Report — {street} · {propertyType || 'Any landed type'} · {WINDOW_OPTIONS.find(o => o.value === windowMonths)?.label}</div>
-            <button type="button" onClick={() => window.print()}
+            <button type="button" className="no-print" onClick={() => window.print()}
               style={{ background: 'transparent', border: '1px solid rgba(212,175,55,0.4)', color: '#F0C84A', padding: '8px 16px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px', fontFamily: "'Montserrat', sans-serif" }}>
               🖨️ Print / Save as PDF
             </button>

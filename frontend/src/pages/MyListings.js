@@ -210,6 +210,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
   const [listings, setListings] = useState([]);
   const activeTab = listingsTab || 'active';
   const [removingPermanently, setRemovingPermanently] = useState({});
+  const [restoring, setRestoring] = useState({});
   const [removePermanentlyError, setRemovePermanentlyError] = useState({});
   const [expanded, setExpanded] = useState(null);
   const [activePlatform, setActivePlatform] = useState({});
@@ -274,6 +275,21 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
       alert('Failed to delete listing.');
     } finally {
       setDeleting(d => ({ ...d, [id]: false }));
+    }
+  };
+
+  const handleRestore = async (id) => {
+    setRestoring(r => ({ ...r, [id]: true }));
+    try {
+      await fetch(`${API}/api/listings/${id}/restore`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setListings(prev => prev.map(l => l.id === id ? { ...l, status: 'active' } : l));
+    } catch (err) {
+      alert('Failed to restore listing.');
+    } finally {
+      setRestoring(r => ({ ...r, [id]: false }));
     }
   };
 
@@ -919,6 +935,24 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
           <div className="listing-card-header" onClick={() => setExpanded(expanded === l.id ? null : l.id)}>
             <div className="listing-card-title">{l.property_type} — {l.location} — SGD {formatPriceM(l.price)}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleRestore(l.id); }}
+                disabled={restoring[l.id]}
+                title="Restore to Active Listings"
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(212,175,55,0.4)',
+                  color: '#F0C84A',
+                  padding: '4px 10px',
+                  borderRadius: '3px',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  fontFamily: "'Montserrat', sans-serif",
+                  opacity: restoring[l.id] ? 0.5 : 1
+                }}
+              >
+                {restoring[l.id] ? 'Restoring...' : '↺ Restore'}
+              </button>
               <button
                 onClick={(e) => { e.stopPropagation(); handleRemovePermanently(l.id); }}
                 disabled={removingPermanently[l.id]}
