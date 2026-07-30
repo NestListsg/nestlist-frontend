@@ -8,6 +8,7 @@ import MyListings from './pages/MyListings';
 import Enquiries from './pages/Enquiries';
 import Buyers from './pages/Buyers';
 import BuyerProfile from './pages/BuyerProfile';
+import PricingReports from './pages/PricingReports';
 import Resources from './pages/Resources';
 import MyProfile from './pages/MyProfile';
 import Billing from './pages/Billing';
@@ -19,7 +20,7 @@ import ResetPassword from './pages/ResetPassword';
 const LOGO = '/logo_2.png';
 
 function Sidebar({ page, setPage, agent, onLogout, isOpen, onClose, listingsTab, setListingsTab }) {
-  const navItems = ['Dashboard', 'New Listing', 'My Listings', 'Enquiries', 'Buyer Management', 'Resources', 'My Profile', 'Billing'];
+  const navItems = ['Dashboard', 'New Listing', 'My Listings', 'Enquiries', 'Buyer Management', 'Pricing Reports', 'Resources', 'My Profile', 'Billing'];
   const initials = agent?.name?.split(' ').slice(0,2).map(n => n[0]).join('').toUpperCase() || 'NL';
 
   const handleNavClick = (item) => {
@@ -156,6 +157,7 @@ function AuthenticatedApp() {
       case 'Buyer Management': return selectedBuyerId
         ? <BuyerProfile token={token} buyerId={selectedBuyerId} onBack={() => setSelectedBuyerId(null)} />
         : <Buyers token={token} onSelectBuyer={setSelectedBuyerId} />;
+      case 'Pricing Reports': return <PricingReports token={token} />;
       case 'Resources': return <Resources />;
       case 'My Profile': return <MyProfile agent={agent} token={token} onUpdate={updateAgent} />;
       case 'Billing': return <Billing />;
