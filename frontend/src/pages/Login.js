@@ -99,12 +99,12 @@ export default function Login({ onLogin }) {
           <form onSubmit={handleLogin}>
             <div className="form-group">
               <label className="form-label">Email</label>
-              <input className="form-input" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+              <input className="form-input" type="email" name="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required />
             </div>
             <div className="form-group">
               <label className="form-label">Password</label>
               <div style={{position:'relative'}}>
-                <input className="form-input" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} style={{paddingRight:'40px'}} required />
+                <input className="form-input" type={showPassword ? 'text' : 'password'} name="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} style={{paddingRight:'40px'}} required />
                 <EyeIcon open={showPassword} onClick={() => setShowPassword(v => !v)} style={eyeStyle} />
               </div>
             </div>
@@ -125,7 +125,7 @@ export default function Login({ onLogin }) {
             <form onSubmit={handleForgotPassword}>
               <div className="form-group">
                 <label className="form-label">Email</label>
-                <input className="form-input" type="email" value={resetEmail} onChange={e => setResetEmail(e.target.value)} required />
+                <input className="form-input" type="email" name="email" autoComplete="username" value={resetEmail} onChange={e => setResetEmail(e.target.value)} required />
               </div>
               {error && <div className="error-msg">{error}</div>}
               <button className="btn-primary" type="submit" disabled={loading}>
@@ -142,11 +142,11 @@ export default function Login({ onLogin }) {
           <form onSubmit={handleRegister}>
             <div className="form-group">
               <label className="form-label">Full Name</label>
-              <input className="form-input" value={name} onChange={e => setName(e.target.value)} required />
+              <input className="form-input" name="name" autoComplete="name" value={name} onChange={e => setName(e.target.value)} required />
             </div>
             <div className="form-group">
               <label className="form-label">Email</label>
-              <input className="form-input" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+              <input className="form-input" type="email" name="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required />
             </div>
             <div className="form-group">
               <label className="form-label">Agency</label>
@@ -166,14 +166,14 @@ export default function Login({ onLogin }) {
             <div className="form-group">
               <label className="form-label">Password</label>
               <div style={{position:'relative'}}>
-                <input className="form-input" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} style={{paddingRight:'40px'}} required />
+                <input className="form-input" type={showPassword ? 'text' : 'password'} name="new-password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} style={{paddingRight:'40px'}} required />
                 <EyeIcon open={showPassword} onClick={() => setShowPassword(v => !v)} style={eyeStyle} />
               </div>
             </div>
             <div className="form-group">
               <label className="form-label">Confirm Password</label>
               <div style={{position:'relative'}}>
-                <input className="form-input" type={showPassword2 ? 'text' : 'password'} value={password2} onChange={e => setPassword2(e.target.value)} style={{paddingRight:'40px'}} required />
+                <input className="form-input" type={showPassword2 ? 'text' : 'password'} name="confirm-password" autoComplete="new-password" value={password2} onChange={e => setPassword2(e.target.value)} style={{paddingRight:'40px'}} required />
                 <EyeIcon open={showPassword2} onClick={() => setShowPassword2(v => !v)} style={eyeStyle} />
               </div>
             </div>

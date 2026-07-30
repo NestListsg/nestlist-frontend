@@ -62,14 +62,14 @@ export default function ResetPassword() {
             <div className="form-group">
               <label className="form-label">New Password</label>
               <div style={{position:'relative'}}>
-                <input className="form-input" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} style={{paddingRight:'40px'}} required />
+                <input className="form-input" type={showPassword ? 'text' : 'password'} name="new-password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} style={{paddingRight:'40px'}} required />
                 <EyeIcon open={showPassword} onClick={() => setShowPassword(v => !v)} style={eyeStyle} />
               </div>
             </div>
             <div className="form-group">
               <label className="form-label">Confirm New Password</label>
               <div style={{position:'relative'}}>
-                <input className="form-input" type={showPassword2 ? 'text' : 'password'} value={password2} onChange={e => setPassword2(e.target.value)} style={{paddingRight:'40px'}} required />
+                <input className="form-input" type={showPassword2 ? 'text' : 'password'} name="confirm-password" autoComplete="new-password" value={password2} onChange={e => setPassword2(e.target.value)} style={{paddingRight:'40px'}} required />
                 <EyeIcon open={showPassword2} onClick={() => setShowPassword2(v => !v)} style={eyeStyle} />
               </div>
             </div>
