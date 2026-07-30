@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { formatPriceM } from '../utils/format';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -234,7 +235,7 @@ export default function Enquiries({ agent, token }) {
                 </div>
               )}
               {enq.email && <div style={{marginBottom:'8px', fontSize:'13px'}}><span style={{color:'rgba(248,244,236,0.5)'}}>Email: </span>{enq.email}</div>}
-              {enq.budget && <div style={{marginBottom:'8px', fontSize:'13px'}}><span style={{color:'rgba(248,244,236,0.5)'}}>Budget: </span>SGD {enq.budget}</div>}
+              {enq.budget && <div style={{marginBottom:'8px', fontSize:'13px'}}><span style={{color:'rgba(248,244,236,0.5)'}}>Budget: </span>SGD {formatPriceM(enq.budget)}</div>}
               {enq.property_interest && <div style={{marginBottom:'8px', fontSize:'13px'}}><span style={{color:'rgba(248,244,236,0.5)'}}>Interest: </span>{enq.property_interest}</div>}
               {enq.notes && (
                 <div style={{marginBottom:'12px', fontSize:'13px'}}>

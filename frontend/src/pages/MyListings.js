@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { formatPriceM } from '../utils/format';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -20,7 +21,7 @@ function generateCaption(listing, platform, style) {
 
   const tldr = {
     facebook: `🏡 ${listing.property_type} | ${listing.location}
-💰 SGD ${listing.price}
+💰 SGD ${formatPriceM(listing.price)}
 
 ${bullets}
 
@@ -30,7 +31,7 @@ Interested? Visit ${listingUrl} or drop us a message.
 
     instagram: `🏡 ${listing.property_type}
 📍 ${listing.location}
-💰 SGD ${listing.price}
+💰 SGD ${formatPriceM(listing.price)}
 
 ${bullets}
 
@@ -40,7 +41,7 @@ DM me or visit ${listingUrl} 🏡
 
     linkedin: `🏡 New Listing | ${listing.property_type}
 📍 ${listing.location}
-💰 SGD ${listing.price}
+💰 SGD ${formatPriceM(listing.price)}
 
 Key details:
 ${bullets}
@@ -53,7 +54,7 @@ Available for private viewing. Connect with me or visit ${listingUrl}.
 
 🏡 *${listing.property_type}*
 📍 ${listing.location}
-💰 SGD ${listing.price}
+💰 SGD ${formatPriceM(listing.price)}
 
 ${bullets}
 
@@ -63,7 +64,7 @@ Reply to arrange a private viewing or visit ${listingUrl}. Thank you! 🙏`
   const long = {
     facebook: `🏡 NEW LISTING | ${listing.property_type}
 📍 ${listing.location}
-💰 SGD ${listing.price}
+💰 SGD ${formatPriceM(listing.price)}
 
 ${body}...
 
@@ -74,7 +75,7 @@ Interested? Visit ${listingUrl} or drop us a message.
     instagram: `✨ ${listing.property_type} for sale ✨
 
 📍 ${listing.location}
-💰 SGD ${listing.price}
+💰 SGD ${formatPriceM(listing.price)}
 
 ${shortBody}...
 
@@ -85,7 +86,7 @@ DM me or visit ${listingUrl} to find out more 🏡
     linkedin: `🏡 New Property Listing | ${listing.property_type}
 
 📍 Location: ${listing.location}
-💰 Asking Price: SGD ${listing.price}
+💰 Asking Price: SGD ${formatPriceM(listing.price)}
 
 ${listing.content?.slice(0, 600) || ''}...
 
@@ -99,7 +100,7 @@ Reach me at ${listingUrl} or reply directly to this post.
 
 🏡 *${listing.property_type}*
 📍 ${listing.location}
-💰 SGD ${listing.price}
+💰 SGD ${formatPriceM(listing.price)}
 
 ${listing.content?.slice(0, 400) || ''}...
 
@@ -111,7 +112,7 @@ Thank you! 🙏`
   const combined = {
     facebook: `🏡 NEW LISTING | ${listing.property_type}
 📍 ${listing.location}
-💰 SGD ${listing.price}
+💰 SGD ${formatPriceM(listing.price)}
 
 ⚡ AT A GLANCE
 ${bullets}
@@ -125,7 +126,7 @@ Interested? Visit ${listingUrl} or drop us a message.
 
     instagram: `🏡 ${listing.property_type}
 📍 ${listing.location}
-💰 SGD ${listing.price}
+💰 SGD ${formatPriceM(listing.price)}
 
 ⚡ AT A GLANCE
 ${bullets}
@@ -139,7 +140,7 @@ DM me or visit ${listingUrl} 🏡
 
     linkedin: `🏡 New Property Listing | ${listing.property_type}
 📍 ${listing.location}
-💰 SGD ${listing.price}
+💰 SGD ${formatPriceM(listing.price)}
 
 ⚡ AT A GLANCE
 ${bullets}
@@ -155,7 +156,7 @@ Available for private viewing. Reach me at ${listingUrl} or reply directly.
 
 🏡 *${listing.property_type}*
 📍 ${listing.location}
-💰 SGD ${listing.price}
+💰 SGD ${formatPriceM(listing.price)}
 
 ⚡ AT A GLANCE
 ${bullets}
@@ -168,7 +169,7 @@ Reply to arrange a private viewing or visit ${listingUrl}. Thank you! 🙏`
 
   const tiktok = {
     tiktok: `${listing.property_type} in ${listing.location} 🏡
-SGD ${listing.price}
+SGD ${formatPriceM(listing.price)}
 ${listing.land_size ? listing.land_size.toLocaleString() + ' sqft' : ''} | ${listing.bedrooms ? listing.bedrooms + ' Bedrooms' : ''}
 Upload your property video and use this caption 👆
 DM to arrange viewing 🔑
@@ -486,7 +487,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
       {activeTab === 'active' && activeListings.map(l => (
         <div key={l.id} className="listing-card">
           <div className="listing-card-header" onClick={() => setExpanded(expanded === l.id ? null : l.id)}>
-            <div className="listing-card-title">{l.property_type} — {l.location} — SGD {l.price}</div>
+            <div className="listing-card-title">{l.property_type} — {l.location} — SGD {formatPriceM(l.price)}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(l); }}
@@ -909,7 +910,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
       {activeTab === 'deleted' && deletedListings.map(l => (
         <div key={l.id} className="listing-card">
           <div className="listing-card-header" onClick={() => setExpanded(expanded === l.id ? null : l.id)}>
-            <div className="listing-card-title">{l.property_type} — {l.location} — SGD {l.price}</div>
+            <div className="listing-card-title">{l.property_type} — {l.location} — SGD {formatPriceM(l.price)}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <button
                 onClick={(e) => { e.stopPropagation(); handleRemovePermanently(l.id); }}

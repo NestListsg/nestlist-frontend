@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { formatPriceM } from '../utils/format';
 
 const API = process.env.REACT_APP_API_URL || '';
 const LOGO = '/logo_2.png';
@@ -82,7 +83,7 @@ export default function PublicListing() {
       <div className="section-label">{listing.property_type}</div>
       <div className="page-title" style={{ marginBottom: '4px' }}>{listing.location}</div>
       <div style={{ fontSize: '20px', color: 'var(--gold-light)', marginBottom: '20px', fontFamily: "'Cormorant Garamond', serif" }}>
-        SGD {listing.price}
+        SGD {formatPriceM(listing.price)}
       </div>
 
       {(listing.bedrooms || listing.land_size > 0 || listing.built_up > 0) && (
