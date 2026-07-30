@@ -50,6 +50,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const [photoSuccess, setPhotoSuccess] = useState('');
   const [photoError, setPhotoError] = useState('');
   const [uploadedPhotoUrls, setUploadedPhotoUrls] = useState([]);
+  const [propertyTypeInvalid, setPropertyTypeInvalid] = useState(false);
   const fileRef = useRef();
   const photoRef = useRef();
 
@@ -185,7 +186,13 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.property_type) {
+      setPropertyTypeInvalid(true);
+      setError('Please select a property type before continuing.');
+      return;
+    }
     if (!declaration) { setError('Please tick the declaration box.'); return; }
+    setPropertyTypeInvalid(false);
     setError(''); setLoading(true); setResult(null); setSaveSuccess('');
     try {
       if (isEditing) {
@@ -321,7 +328,12 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
           <div>
             <div className="form-group">
               <label className="form-label">1. Property Type</label>
-              <select className="form-select" value={form.property_type} onChange={e => set('property_type', e.target.value)} required>
+              <select
+                className={`form-select${propertyTypeInvalid || (imageSuccess && !form.property_type) ? ' invalid' : ''}`}
+                value={form.property_type}
+                onChange={e => { set('property_type', e.target.value); setPropertyTypeInvalid(false); }}
+                required
+              >
                 <option value="" disabled>-- Select Property Type --</option>
                 {propertyTypes.map(t => <option key={t}>{t}</option>)}
               </select>
