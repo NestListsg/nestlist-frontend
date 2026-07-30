@@ -321,9 +321,15 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
           <div>
             <div className="form-group">
               <label className="form-label">1. Property Type</label>
-              <select className="form-select" value={form.property_type} onChange={e => set('property_type', e.target.value)}>
+              <select className="form-select" value={form.property_type} onChange={e => set('property_type', e.target.value)} required>
+                <option value="" disabled>-- Select Property Type --</option>
                 {propertyTypes.map(t => <option key={t}>{t}</option>)}
               </select>
+              {imageSuccess && !form.property_type && (
+                <div className="error-msg" style={{ marginTop: '6px' }}>
+                  Your screenshots didn't state a property type — please select the correct one yourself before continuing.
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">2. Location</label>
