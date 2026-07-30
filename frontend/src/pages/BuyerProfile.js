@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { formatPriceM } from '../utils/format';
 import BuyerFormModal from '../components/BuyerFormModal';
 import PropertyFormModal from '../components/PropertyFormModal';
+import MatchingListings from '../components/MatchingListings';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -143,6 +144,8 @@ export default function BuyerProfile({ token, buyerId, onBack }) {
           </div>
         )}
       </div>
+
+      <MatchingListings token={token} buyerId={buyerId} />
 
       {SECTIONS.map(section => {
         const entries = (buyer.properties || []).filter(p => p.kind === section.kind);

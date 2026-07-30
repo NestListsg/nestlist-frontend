@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { formatPriceM } from '../utils/format';
+import MatchingBuyers from '../components/MatchingBuyers';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -606,6 +607,12 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
               )}
 
               <div className="listing-card-body">{(l.content || '').replace(/\*\*/g, '').replace(/^#+\s/gm, '').replace(/---/g, '').trim()}</div>
+
+              <MatchingBuyers
+                token={token}
+                listingId={l.id}
+                listingSummary={`${l.property_type} in ${l.location}, SGD ${formatPriceM(l.price)}`}
+              />
 
               <div style={{
                 margin: '8px 20px 20px',
