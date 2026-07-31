@@ -15,7 +15,7 @@ const emptyForm = {
   temperature: 'WARM', seller_notes: ''
 };
 
-export default function SellerFormModal({ token, seller, onClose, onSaved }) {
+export default function SellerFormModal({ token, seller, initialValues, onClose, onSaved }) {
   const isEditing = !!seller;
   const [form, setForm] = useState(() => seller ? {
     seller_name: seller.seller_name || '', seller_phone: seller.seller_phone || '',
@@ -25,7 +25,7 @@ export default function SellerFormModal({ token, seller, onClose, onSaved }) {
     land_size: seller.land_size || '', motivation: seller.motivation || '',
     timeline: seller.timeline || '', mandate_type: seller.mandate_type || '',
     temperature: seller.temperature || 'WARM', seller_notes: seller.seller_notes || ''
-  } : emptyForm);
+  } : { ...emptyForm, ...(initialValues || {}) });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 

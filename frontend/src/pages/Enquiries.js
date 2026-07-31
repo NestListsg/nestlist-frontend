@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { formatPriceM } from '../utils/format';
+import { formatPriceM, fullNumberToMillions } from '../utils/format';
+import BuyerFormModal from '../components/BuyerFormModal';
+import SellerFormModal from '../components/SellerFormModal';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -20,6 +22,28 @@ function buildBuyerWhatsAppUrl(enq) {
   return `https://wa.me/${withCountryCode}?text=${encodeURIComponent(greeting)}`;
 }
 
+function buildBuyerSeed(enq) {
+  return {
+    name: enq.client_name || '',
+    phone: enq.phone || '',
+    email: enq.email || '',
+    budget_max: enq.budget ? fullNumberToMillions(enq.budget) : '',
+    notes: [enq.property_interest && `Interested in: ${enq.property_interest}`, enq.notes]
+      .filter(Boolean).join('\n\n')
+  };
+}
+
+function buildSellerSeed(enq) {
+  return {
+    seller_name: enq.client_name || '',
+    seller_phone: enq.phone || '',
+    seller_email: enq.email || '',
+    location: enq.property_interest || '',
+    priceMillions: enq.budget ? fullNumberToMillions(enq.budget) : '',
+    seller_notes: enq.notes || ''
+  };
+}
+
 export default function Enquiries({ agent, token }) {
   const [enquiries, setEnquiries] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -28,6 +52,8 @@ export default function Enquiries({ agent, token }) {
   const [expanded, setExpanded] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [converting, setConverting] = useState(null); // { enquiry, target: 'buyer' | 'seller' }
+  const [convertedMessage, setConvertedMessage] = useState('');
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -243,17 +269,57 @@ export default function Enquiries({ agent, token }) {
                   <span style={{whiteSpace:'pre-wrap'}}>{enq.notes}</span>
                 </div>
               )}
-              <div style={{display:'flex', gap:'10px', marginTop:'12px'}}>
+              <div style={{display:'flex', gap:'10px', marginTop:'12px', flexWrap:'wrap'}}>
                 <button className="btn-gold" style={{maxWidth:'120px'}} onClick={() => handleEdit(enq)}>Edit</button>
+                {(enq.client_type === 'Buyer' || enq.client_type === 'Both') && (
+                  <button onClick={() => setConverting({ enquiry: enq, target: 'buyer' })}
+                    style={{background:'transparent', border:'1px solid rgba(212,175,55,0.4)', color:'#F0C84A', padding:'8px 16px', borderRadius:'3px', cursor:'pointer', fontSize:'12px', fontFamily:"'Montserrat', sans-serif"}}>
+                    + Add to Buyers
+                  </button>
+                )}
+                {(enq.client_type === 'Seller' || enq.client_type === 'Both') && (
+                  <button onClick={() => setConverting({ enquiry: enq, target: 'seller' })}
+                    style={{background:'transparent', border:'1px solid rgba(212,175,55,0.4)', color:'#F0C84A', padding:'8px 16px', borderRadius:'3px', cursor:'pointer', fontSize:'12px', fontFamily:"'Montserrat', sans-serif"}}>
+                    + Add to Sellers
+                  </button>
+                )}
                 <button onClick={() => handleDelete(enq.id)}
                   style={{background:'transparent', border:'1px solid rgba(255,107,107,0.4)', color:'#ff6b6b', padding:'8px 16px', borderRadius:'3px', cursor:'pointer', fontSize:'12px', fontFamily:"'Montserrat', sans-serif"}}>
                   Delete
                 </button>
               </div>
+              {convertedMessage && expanded === enq.id && (
+                <div className="success-msg" style={{marginTop:'10px'}}>{convertedMessage}</div>
+              )}
             </div>
           )}
         </div>
       ))}
+
+      {converting?.target === 'buyer' && (
+        <BuyerFormModal
+          token={token}
+          initialValues={buildBuyerSeed(converting.enquiry)}
+          onClose={() => setConverting(null)}
+          onSaved={() => {
+            setConverting(null);
+            setConvertedMessage('Added to Buyers.');
+            setTimeout(() => setConvertedMessage(''), 4000);
+          }}
+        />
+      )}
+      {converting?.target === 'seller' && (
+        <SellerFormModal
+          token={token}
+          initialValues={buildSellerSeed(converting.enquiry)}
+          onClose={() => setConverting(null)}
+          onSaved={() => {
+            setConverting(null);
+            setConvertedMessage('Added to Sellers.');
+            setTimeout(() => setConvertedMessage(''), 4000);
+          }}
+        />
+      )}
     </div>
   );
 }

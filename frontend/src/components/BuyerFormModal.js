@@ -43,7 +43,7 @@ function Chip({ active, onClick, children }) {
   );
 }
 
-export default function BuyerFormModal({ token, buyer, onClose, onSaved }) {
+export default function BuyerFormModal({ token, buyer, initialValues, onClose, onSaved }) {
   const isEditing = !!buyer;
   const [form, setForm] = useState(() => buyer ? {
     name: buyer.name || '', phone: buyer.phone || '', email: buyer.email || '',
@@ -57,7 +57,7 @@ export default function BuyerFormModal({ token, buyer, onClose, onSaved }) {
     sold_house: buyer.sold_house || '', financing: buyer.financing || '',
     must_haves: buyer.must_haves || '', deal_breakers: buyer.deal_breakers || '',
     notes: buyer.notes || ''
-  } : emptyForm);
+  } : { ...emptyForm, ...(initialValues || {}) });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
