@@ -13,6 +13,7 @@ const DEFAULT_FORM = {
 
 export default function NewListing({ agent, token, editingListing, onDoneEditing }) {
   const isEditing = !!editingListing;
+  const isConvertingSeller = isEditing && editingListing.status === 'lead';
   const [form, setForm] = useState(() => {
     if (editingListing) {
       return {
@@ -232,9 +233,11 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
 
   return (
     <div className="page-content">
-      <div className="page-title">{isEditing ? 'Edit Listing' : 'Submit New Listing'}</div>
+      <div className="page-title">{isConvertingSeller ? 'Convert to Listing' : isEditing ? 'Edit Listing' : 'Submit New Listing'}</div>
       <div className="page-subtitle">
-        {isEditing ? 'Update the details below and save your changes.' : 'Fill in the details below. Claude will write your personalised listing automatically.'}
+        {isConvertingSeller
+          ? 'Fill in the remaining details, then save to publish this as a live listing.'
+          : isEditing ? 'Update the details below and save your changes.' : 'Fill in the details below. Claude will write your personalised listing automatically.'}
       </div>
 
       {/* Saved form notice */}
@@ -420,7 +423,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
           <button className="btn-primary" type="submit" disabled={loading}>
             {loading
               ? <><span className="spinner" />{isEditing ? 'Saving...' : 'Generating your listing...'}</>
-              : (isEditing ? 'Save Changes' : 'Generate My Listing Automatically')}
+              : (isConvertingSeller ? '🏡 Publish as Listing' : isEditing ? 'Save Changes' : 'Generate My Listing Automatically')}
           </button>
         </div>
       </form>
