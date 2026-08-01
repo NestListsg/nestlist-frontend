@@ -56,6 +56,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const [propertyTypeInvalid, setPropertyTypeInvalid] = useState(false);
   const fileRef = useRef();
   const photoRef = useRef();
+  const folderRef = useRef();
 
   // Persist form to localStorage whenever it changes (skip while editing an existing listing)
   useEffect(() => {
@@ -148,7 +149,14 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   };
 
   const handlePhotoUpload = async (e) => {
-    const files = Array.from(e.target.files).slice(0, 15);
+    // Folder selections (webkitdirectory) commonly include junk that isn't a
+    // photo or a PDF -- .DS_Store, thumbs.db, nested non-image files -- so only
+    // keep files we can actually do something with, rather than assuming
+    // "not a PDF" means "is an image".
+    const allFiles = Array.from(e.target.files);
+    const files = allFiles
+      .filter(f => f.type === 'application/pdf' || f.type.startsWith('image/'))
+      .slice(0, 15);
     if (!files.length) return;
     if (!result || !result.listing) {
       setPhotoError('Please generate a listing first before uploading photos.');
@@ -169,7 +177,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       });
 
       const pdfFiles = files.filter(f => f.type === 'application/pdf');
-      const imageFiles = files.filter(f => f.type !== 'application/pdf');
+      const imageFiles = files.filter(f => f.type.startsWith('image/'));
 
       const imageResults = await Promise.all(imageFiles.map(readFile));
 
@@ -476,16 +484,37 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
               <div className="divider" />
               <div className="section-label">Step 3 - Upload Property Photos</div>
               <div style={{ fontSize: '13px', color: 'rgba(248,244,236,0.65)', marginBottom: '14px' }}>
-                Upload up to 15 property photos, or a PDF brochure/marketing kit -- every photo inside it is
-                extracted automatically. These will be saved to your listing and used for social media posts.
+                Upload up to 15 property photos, a PDF brochure/marketing kit (every photo inside it is
+                extracted automatically), or an entire folder of photos at once. These will be saved to your
+                listing and used for social media posts.
               </div>
               <input type="file" accept="image/*,application/pdf" ref={photoRef} multiple style={{ display: 'none' }} onChange={handlePhotoUpload} />
-              <button
-                className="btn-gold" type="button" style={{ maxWidth: '320px' }}
-                onClick={() => photoRef.current.click()} disabled={photoLoading}
-              >
-                {photoLoading ? <><span className="spinner" />{photoLoadingLabel}</> : 'Upload Property Photos or PDF'}
-              </button>
+              <input type="file" accept="image/*" ref={folderRef} multiple webkitdirectory="" directory="" style={{ display: 'none' }} onChange={handlePhotoUpload} />
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button
+                  className="btn-gold" type="button" style={{ maxWidth: '320px' }}
+                  onClick={() => photoRef.current.click()} disabled={photoLoading}
+                >
+                  {photoLoading ? <><span className="spinner" />{photoLoadingLabel}</> : 'Upload Property Photos or PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => folderRef.current.click()} disabled={photoLoading}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(212,175,55,0.4)',
+                    color: '#F0C84A',
+                    padding: '0 20px',
+                    borderRadius: '3px',
+                    cursor: photoLoading ? 'not-allowed' : 'pointer',
+                    fontSize: '13px',
+                    fontFamily: "'Montserrat', sans-serif",
+                    opacity: photoLoading ? 0.5 : 1
+                  }}
+                >
+                  Upload From a Folder
+                </button>
+              </div>
 
               {photoError && <div className="error-msg" style={{ marginTop: '12px' }}>{photoError}</div>}
               {photoSuccess && <div className="success-msg" style={{ marginTop: '12px' }}>{photoSuccess}</div>}
