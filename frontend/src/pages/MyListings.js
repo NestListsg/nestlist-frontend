@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { formatPriceM } from '../utils/format';
 import MatchingBuyers from '../components/MatchingBuyers';
 
@@ -235,6 +235,9 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
   const [fbPostSuccess, setFbPostSuccess] = useState({});
   const [posterTemplates, setPosterTemplates] = useState([]);
   const [posterTemplateChoice, setPosterTemplateChoice] = useState({});
+  const [posterPhotoUploading, setPosterPhotoUploading] = useState({});
+  const [posterPhotoUploadTarget, setPosterPhotoUploadTarget] = useState(null);
+  const posterPhotoInputRef = useRef(null);
 
   useEffect(() => {
     fetch(`${API}/api/listings?status=all`, {
@@ -419,6 +422,53 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
     }
   };
 
+  const handlePosterPhotoFileSelected = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    const listingId = posterPhotoUploadTarget;
+    e.target.value = '';
+    if (!file || !listingId) return;
+
+    setPosterPhotoUploading(p => ({ ...p, [listingId]: true }));
+    try {
+      const imageData = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch(`${API}/api/listings/${listingId}/poster-photo`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_data: imageData })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to upload poster photo');
+      setListings(prev => prev.map(l => l.id === listingId ? { ...l, poster_photo_url: data.poster_photo_url } : l));
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setPosterPhotoUploading(p => ({ ...p, [listingId]: false }));
+    }
+  };
+
+  const handleRemovePosterPhoto = async (listing) => {
+    if (!window.confirm('Remove this poster photo? Poster generation will go back to using one of the listing photos.')) return;
+    setPosterPhotoUploading(p => ({ ...p, [listing.id]: true }));
+    try {
+      const res = await fetch(`${API}/api/listings/${listing.id}/poster-photo`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to remove poster photo');
+      setListings(prev => prev.map(l => l.id === listing.id ? { ...l, poster_photo_url: null } : l));
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setPosterPhotoUploading(p => ({ ...p, [listing.id]: false }));
+    }
+  };
+
   const handleGenerateVideo = async (listing) => {
     setVideoLoading(v => ({ ...v, [listing.id]: true }));
     setVideoError(e => ({ ...e, [listing.id]: '' }));
@@ -513,6 +563,13 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
 
   return (
     <div className="page-content">
+      <input
+        type="file"
+        accept="image/*"
+        ref={posterPhotoInputRef}
+        style={{ display: 'none' }}
+        onChange={handlePosterPhotoFileSelected}
+      />
       <div className="page-title">{activeTab === 'deleted' ? 'My Listings — Deleted' : 'My Listings'}</div>
 
       {activeTab === 'active' && (
@@ -668,7 +725,56 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
                   borderBottom: '1px solid rgba(212,175,55,0.15)'
                 }}>
                   <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '10px' }}>
-                    Branded poster for your post/story. Click a photo above (marked ★ POSTER) to choose the background.
+                    Branded poster for your post/story. Click a photo above (marked ★ POSTER) to choose the background
+                    &mdash; or use a dedicated poster photo below, without touching your listing gallery.
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+                    {l.poster_photo_url && (
+                      <img
+                        src={l.poster_photo_url}
+                        alt="Poster photo"
+                        style={{ width: '90px', height: '66px', objectFit: 'cover', borderRadius: '4px', border: '2px solid #F0C84A' }}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => { setPosterPhotoUploadTarget(l.id); posterPhotoInputRef.current.click(); }}
+                      disabled={posterPhotoUploading[l.id]}
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid rgba(212,175,55,0.4)',
+                        color: '#F0C84A',
+                        padding: '8px 14px',
+                        borderRadius: '3px',
+                        cursor: posterPhotoUploading[l.id] ? 'not-allowed' : 'pointer',
+                        fontSize: '12px',
+                        fontFamily: "'Montserrat', sans-serif",
+                        opacity: posterPhotoUploading[l.id] ? 0.5 : 1
+                      }}
+                    >
+                      {posterPhotoUploading[l.id] ? 'Uploading...' : l.poster_photo_url ? '🖼️ Change Poster Photo' : '🖼️ Set Poster Photo'}
+                    </button>
+                    {l.poster_photo_url && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePosterPhoto(l)}
+                        disabled={posterPhotoUploading[l.id]}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid rgba(255,107,107,0.4)',
+                          color: '#ff6b6b',
+                          padding: '8px 14px',
+                          borderRadius: '3px',
+                          cursor: posterPhotoUploading[l.id] ? 'not-allowed' : 'pointer',
+                          fontSize: '12px',
+                          fontFamily: "'Montserrat', sans-serif",
+                          opacity: posterPhotoUploading[l.id] ? 0.5 : 1
+                        }}
+                      >
+                        Reset to Gallery Photo
+                      </button>
+                    )}
                   </div>
 
                   {posterTemplates.length > 0 && (
