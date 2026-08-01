@@ -49,6 +49,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const [imageSuccess, setImageSuccess] = useState('');
   const [abortController, setAbortController] = useState(null);
   const [photoLoading, setPhotoLoading] = useState(false);
+  const [photoLoadingLabel, setPhotoLoadingLabel] = useState('Uploading photos...');
   const [photoSuccess, setPhotoSuccess] = useState('');
   const [photoError, setPhotoError] = useState('');
   const [uploadedPhotoUrls, setUploadedPhotoUrls] = useState([]);
@@ -166,7 +167,33 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
-      const images = await Promise.all(files.map(readFile));
+
+      const pdfFiles = files.filter(f => f.type === 'application/pdf');
+      const imageFiles = files.filter(f => f.type !== 'application/pdf');
+
+      const imageResults = await Promise.all(imageFiles.map(readFile));
+
+      let pdfExtractedImages = [];
+      if (pdfFiles.length > 0) {
+        setPhotoLoadingLabel(pdfFiles.length > 1 ? 'Extracting photos from PDFs...' : 'Extracting photos from PDF...');
+        const pdfReads = await Promise.all(pdfFiles.map(readFile));
+        const perPdfResults = await Promise.all(pdfReads.map(async ({ image_data }) => {
+          const res = await fetch(`${API}/api/listings/extract-pdf-photos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ pdf_data: image_data })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || 'Failed to extract photos from PDF');
+          return data.images;
+        }));
+        pdfExtractedImages = perPdfResults.flat();
+        setPhotoLoadingLabel('Uploading photos...');
+      }
+
+      const images = [...imageResults, ...pdfExtractedImages].slice(0, 15);
+      if (!images.length) throw new Error('No photos found to upload.');
+
       const response = await fetch(`${API}/api/listings/${result.listing.id}/upload-images`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -175,11 +202,13 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || 'Failed to upload photos');
       setUploadedPhotoUrls(data.image_urls);
-      setPhotoSuccess(`${files.length} photo${files.length > 1 ? 's' : ''} uploaded successfully!`);
+      const pdfNote = pdfExtractedImages.length > 0 ? ` (${pdfExtractedImages.length} extracted from PDF)` : '';
+      setPhotoSuccess(`${images.length} photo${images.length > 1 ? 's' : ''} uploaded successfully!${pdfNote}`);
     } catch (err) {
       setPhotoError(`Failed to upload photos: ${err.message}`);
     } finally {
       setPhotoLoading(false);
+      setPhotoLoadingLabel('Uploading photos...');
     }
   };
 
@@ -447,14 +476,15 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
               <div className="divider" />
               <div className="section-label">Step 3 - Upload Property Photos</div>
               <div style={{ fontSize: '13px', color: 'rgba(248,244,236,0.65)', marginBottom: '14px' }}>
-                Upload up to 15 property photos. These will be saved to your listing and used for social media posts.
+                Upload up to 15 property photos, or a PDF brochure/marketing kit -- every photo inside it is
+                extracted automatically. These will be saved to your listing and used for social media posts.
               </div>
-              <input type="file" accept="image/*" ref={photoRef} multiple style={{ display: 'none' }} onChange={handlePhotoUpload} />
+              <input type="file" accept="image/*,application/pdf" ref={photoRef} multiple style={{ display: 'none' }} onChange={handlePhotoUpload} />
               <button
                 className="btn-gold" type="button" style={{ maxWidth: '320px' }}
                 onClick={() => photoRef.current.click()} disabled={photoLoading}
               >
-                {photoLoading ? <><span className="spinner" />Uploading photos...</> : 'Upload Property Photos (up to 15)'}
+                {photoLoading ? <><span className="spinner" />{photoLoadingLabel}</> : 'Upload Property Photos or PDF'}
               </button>
 
               {photoError && <div className="error-msg" style={{ marginTop: '12px' }}>{photoError}</div>}
