@@ -220,6 +220,8 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
   const [downloading, setDownloading] = useState({});
   const [shareStatus, setShareStatus] = useState({});
   const [posterLoading, setPosterLoading] = useState({});
+  const [videoLoading, setVideoLoading] = useState({});
+  const [videoError, setVideoError] = useState({});
   const [posterError, setPosterError] = useState({});
   const [posterPhotoIndex, setPosterPhotoIndex] = useState({});
   const [deletingPhoto, setDeletingPhoto] = useState({});
@@ -414,6 +416,24 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
       setPosterError(e => ({ ...e, [listing.id]: err.message }));
     } finally {
       setPosterLoading(p => ({ ...p, [listing.id]: false }));
+    }
+  };
+
+  const handleGenerateVideo = async (listing) => {
+    setVideoLoading(v => ({ ...v, [listing.id]: true }));
+    setVideoError(e => ({ ...e, [listing.id]: '' }));
+    try {
+      const res = await fetch(`${API}/api/listings/${listing.id}/generate-video`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to generate video');
+      setListings(prev => prev.map(l => l.id === listing.id ? { ...l, video_url: data.video_url } : l));
+    } catch (err) {
+      setVideoError(e => ({ ...e, [listing.id]: err.message }));
+    } finally {
+      setVideoLoading(v => ({ ...v, [listing.id]: false }));
     }
   };
 
@@ -733,6 +753,47 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
                   </div>
                   {posterError[l.id] && (
                     <div style={{ color: '#e08080', fontSize: '12px', marginTop: '8px' }}>{posterError[l.id]}</div>
+                  )}
+
+                  {l.video_url && (
+                    <div style={{ marginTop: '14px', marginBottom: '10px' }}>
+                      <video
+                        src={l.video_url}
+                        controls
+                        style={{ maxWidth: '220px', borderRadius: '4px', border: '1px solid rgba(212,175,55,0.3)', display: 'block' }}
+                      />
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', marginTop: l.video_url ? '0' : '14px' }}>
+                    <button
+                      className="btn-primary"
+                      style={{ maxWidth: '220px' }}
+                      onClick={() => handleGenerateVideo(l)}
+                      disabled={videoLoading[l.id]}
+                    >
+                      {videoLoading[l.id] ? 'Generating video... (~20s)' : l.video_url ? '🎬 Regenerate Video' : '🎬 Generate Video'}
+                    </button>
+                    {l.video_url && (
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadFile(l.video_url, `${l.id.slice(0, 8)}-video.mp4`)}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid rgba(212,175,55,0.4)',
+                          color: '#F0C84A',
+                          padding: '10px 16px',
+                          borderRadius: '3px',
+                          fontSize: '12px',
+                          fontFamily: "'Montserrat', sans-serif",
+                          cursor: 'pointer'
+                        }}
+                      >
+                        ⬇ Download
+                      </button>
+                    )}
+                  </div>
+                  {videoError[l.id] && (
+                    <div style={{ color: '#e08080', fontSize: '12px', marginTop: '8px' }}>{videoError[l.id]}</div>
                   )}
                 </div>
 
