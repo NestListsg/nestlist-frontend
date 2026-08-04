@@ -156,7 +156,9 @@ export default function PricingReports({ token }) {
                   <thead>
                     <tr style={{ borderBottom: '1px solid rgba(212,175,55,0.2)', color: 'rgba(248,244,236,0.4)', textAlign: 'left' }}>
                       <th style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>STREET</th>
+                      <th style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>DISTRICT</th>
                       <th style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>TYPE</th>
+                      <th style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>TENURE</th>
                       <th style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>LAND (SQFT)</th>
                       <th style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>PSF</th>
                       <th style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>PRICE</th>
@@ -167,7 +169,9 @@ export default function PricingReports({ token }) {
                     {report.comparables.map((c, i) => (
                       <tr key={i} style={{ borderBottom: '1px solid rgba(212,175,55,0.08)' }}>
                         <td style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>{c.street}</td>
+                        <td style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>{c.district}</td>
                         <td style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>{c.property_type}</td>
+                        <td style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>{c.tenure}</td>
                         <td style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>{c.area_sqft.toLocaleString()}</td>
                         <td style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>SGD {c.psf.toLocaleString()}</td>
                         <td style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>SGD {formatPriceM(c.price)}</td>
