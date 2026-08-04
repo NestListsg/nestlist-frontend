@@ -225,6 +225,8 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
   const [posterError, setPosterError] = useState({});
   const [posterPhotoIndex, setPosterPhotoIndex] = useState({});
   const [deletingPhoto, setDeletingPhoto] = useState({});
+  const [enhancingPhoto, setEnhancingPhoto] = useState({});
+  const [enhancePhotoError, setEnhancePhotoError] = useState({});
   const [igCaption, setIgCaption] = useState({});
   const [igPosting, setIgPosting] = useState({});
   const [igPostError, setIgPostError] = useState({});
@@ -463,6 +465,30 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
     }
   };
 
+  const handleEnhancePhoto = async (listing, index) => {
+    const key = `${listing.id}-${index}`;
+    setEnhancingPhoto(e => ({ ...e, [key]: true }));
+    setEnhancePhotoError(e => ({ ...e, [key]: '' }));
+    try {
+      const res = await fetch(`${API}/api/listings/${listing.id}/images/${index}/enhance`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to enhance photo');
+      setListings(prev => prev.map(l => {
+        if (l.id !== listing.id) return l;
+        const images = [...l.images];
+        images[index] = data.image_url;
+        return { ...l, images };
+      }));
+    } catch (err) {
+      setEnhancePhotoError(e => ({ ...e, [key]: err.message }));
+    } finally {
+      setEnhancingPhoto(e => ({ ...e, [key]: false }));
+    }
+  };
+
   const handlePostInstagram = async (listing) => {
     const caption = igCaption[listing.id] ?? generateCaption(listing, 'instagram', getCaptionStyle(listing.id));
     setIgPosting(p => ({ ...p, [listing.id]: true }));
@@ -624,10 +650,30 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
                           >
                             ⬇ Save
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEnhancePhoto(l, i)}
+                            disabled={enhancingPhoto[`${l.id}-${i}`]}
+                            title="Auto-enhance this photo (free, replaces it in place)"
+                            style={{
+                              position: 'absolute', bottom: '4px', left: '4px',
+                              background: 'rgba(0,0,0,0.6)', color: '#F0C84A',
+                              border: 'none', borderRadius: '3px', fontSize: '10px', padding: '2px 6px',
+                              cursor: enhancingPhoto[`${l.id}-${i}`] ? 'not-allowed' : 'pointer',
+                              opacity: enhancingPhoto[`${l.id}-${i}`] ? 0.6 : 1
+                            }}
+                          >
+                            {enhancingPhoto[`${l.id}-${i}`] ? '✨...' : '✨ Enhance'}
+                          </button>
                         </div>
                       );
                     })}
                   </div>
+                  {Object.entries(enhancePhotoError).some(([k, v]) => k.startsWith(`${l.id}-`) && v) && (
+                    <div style={{ color: '#e08080', fontSize: '12px', marginBottom: '10px' }}>
+                      {Object.entries(enhancePhotoError).find(([k, v]) => k.startsWith(`${l.id}-`) && v)?.[1]}
+                    </div>
+                  )}
                   <button
                     onClick={() => handleDownloadAll(l)}
                     disabled={downloading[l.id]}
