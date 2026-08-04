@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { formatPriceM } from '../utils/format';
 
 const API = process.env.REACT_APP_API_URL || '';
@@ -13,14 +13,38 @@ const WINDOW_OPTIONS = [
   { value: 36, label: 'Past 36 months' },
 ];
 
+// Persisted across tab switches (and browser restarts) so a generated report
+// isn't lost just because the agent clicked to another page -- this page's
+// component unmounts on tab switch like every other page in the app, so
+// plain useState alone would wipe the report out from under them.
+const STORAGE_KEY = 'nestlist_pricing_report_state';
+
+function loadPersisted() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function PricingReports({ token }) {
-  const [street, setStreet] = useState('');
-  const [propertyType, setPropertyType] = useState('');
-  const [landSize, setLandSize] = useState('');
-  const [windowMonths, setWindowMonths] = useState(24);
+  const persisted = loadPersisted();
+  const [street, setStreet] = useState(persisted?.street || '');
+  const [propertyType, setPropertyType] = useState(persisted?.propertyType || '');
+  const [landSize, setLandSize] = useState(persisted?.landSize || '');
+  const [windowMonths, setWindowMonths] = useState(persisted?.windowMonths || 24);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [report, setReport] = useState(null);
+  const [report, setReport] = useState(persisted?.report || null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ street, propertyType, landSize, windowMonths, report }));
+    } catch {
+      // localStorage unavailable (e.g. private browsing) -- report just won't persist, not fatal
+    }
+  }, [street, propertyType, landSize, windowMonths, report]);
 
   const handleGenerate = async (e) => {
     e.preventDefault();
