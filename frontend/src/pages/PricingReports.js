@@ -13,6 +13,20 @@ const WINDOW_OPTIONS = [
   { value: 36, label: 'Past 36 months' },
 ];
 
+// Data-driven so a column can be hidden (e.g. when printing for a buyer who
+// doesn't need to see property type) without touching the table markup.
+const COLUMNS = [
+  { key: 'street', label: 'Street', render: c => c.street },
+  { key: 'district', label: 'District', render: c => c.district },
+  { key: 'property_type', label: 'Type', render: c => c.property_type },
+  { key: 'tenure', label: 'Tenure', render: c => c.tenure },
+  { key: 'area_sqft', label: 'Land (sqft)', render: c => c.area_sqft.toLocaleString() },
+  { key: 'psf', label: 'PSF', render: c => `SGD ${c.psf.toLocaleString()}` },
+  { key: 'price', label: 'Price', render: c => `SGD ${formatPriceM(c.price)}` },
+  { key: 'contract_date', label: 'Date', render: c => c.contract_date },
+];
+const DEFAULT_VISIBLE_COLUMNS = COLUMNS.reduce((acc, col) => ({ ...acc, [col.key]: true }), {});
+
 // Persisted across tab switches (and browser restarts) so a generated report
 // isn't lost just because the agent clicked to another page -- this page's
 // component unmounts on tab switch like every other page in the app, so
@@ -37,14 +51,19 @@ export default function PricingReports({ token }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [report, setReport] = useState(persisted?.report || null);
+  const [visibleColumns, setVisibleColumns] = useState({ ...DEFAULT_VISIBLE_COLUMNS, ...(persisted?.visibleColumns || {}) });
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ street, propertyType, landSize, windowMonths, report }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ street, propertyType, landSize, windowMonths, report, visibleColumns }));
     } catch {
       // localStorage unavailable (e.g. private browsing) -- report just won't persist, not fatal
     }
-  }, [street, propertyType, landSize, windowMonths, report]);
+  }, [street, propertyType, landSize, windowMonths, report, visibleColumns]);
+
+  const toggleColumn = (key) => {
+    setVisibleColumns(v => ({ ...v, [key]: !v[key] }));
+  };
 
   const handleGenerate = async (e) => {
     e.preventDefault();
@@ -151,31 +170,45 @@ export default function PricingReports({ token }) {
               )}
 
               <div className="section-label" style={{ marginBottom: '10px' }}>Comparable Transactions</div>
+
+              <div className="no-print" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '12px' }}>
+                <span style={{ fontSize: '11px', color: 'rgba(248,244,236,0.4)', marginRight: '2px' }}>Columns to include (e.g. hide before printing for a buyer):</span>
+                {COLUMNS.map(col => {
+                  const active = visibleColumns[col.key] !== false;
+                  return (
+                    <button
+                      key={col.key}
+                      type="button"
+                      onClick={() => toggleColumn(col.key)}
+                      style={{
+                        background: active ? 'rgba(212,175,55,0.2)' : 'transparent',
+                        border: `1px solid ${active ? '#D4AF37' : 'rgba(212,175,55,0.25)'}`,
+                        color: active ? '#F0C84A' : 'rgba(248,244,236,0.4)',
+                        padding: '4px 10px', borderRadius: '3px', cursor: 'pointer',
+                        fontSize: '11px', fontFamily: "'Montserrat', sans-serif"
+                      }}
+                    >
+                      {active ? '✓ ' : ''}{col.label}
+                    </button>
+                  );
+                })}
+              </div>
+
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid rgba(212,175,55,0.2)', color: 'rgba(248,244,236,0.4)', textAlign: 'left' }}>
-                      <th style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>STREET</th>
-                      <th style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>DISTRICT</th>
-                      <th style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>TYPE</th>
-                      <th style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>TENURE</th>
-                      <th style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>LAND (SQFT)</th>
-                      <th style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>PSF</th>
-                      <th style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>PRICE</th>
-                      <th style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>DATE</th>
+                      {COLUMNS.filter(col => visibleColumns[col.key] !== false).map(col => (
+                        <th key={col.key} style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>{col.label.toUpperCase()}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
                     {report.comparables.map((c, i) => (
                       <tr key={i} style={{ borderBottom: '1px solid rgba(212,175,55,0.08)' }}>
-                        <td style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>{c.street}</td>
-                        <td style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>{c.district}</td>
-                        <td style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>{c.property_type}</td>
-                        <td style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>{c.tenure}</td>
-                        <td style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>{c.area_sqft.toLocaleString()}</td>
-                        <td style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>SGD {c.psf.toLocaleString()}</td>
-                        <td style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>SGD {formatPriceM(c.price)}</td>
-                        <td style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>{c.contract_date}</td>
+                        {COLUMNS.filter(col => visibleColumns[col.key] !== false).map(col => (
+                          <td key={col.key} style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>{col.render(c)}</td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>
