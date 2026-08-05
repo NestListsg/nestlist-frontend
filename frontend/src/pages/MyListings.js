@@ -206,7 +206,7 @@ const STYLES = [
   { key: 'combined', label: '📖⚡ Both' },
 ];
 
-export default function MyListings({ agent, token, onEdit, listingsTab }) {
+export default function MyListings({ agent, token, onEdit, listingsTab, onListingOpen }) {
   const [listings, setListings] = useState([]);
   const activeTab = listingsTab || 'active';
   const [removingPermanently, setRemovingPermanently] = useState({});
@@ -571,7 +571,11 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
 
       {activeTab === 'active' && activeListings.map(l => (
         <div key={l.id} className="listing-card">
-          <div className="listing-card-header" onClick={() => setExpanded(expanded === l.id ? null : l.id)}>
+          <div className="listing-card-header" onClick={() => {
+            const next = expanded === l.id ? null : l.id;
+            setExpanded(next);
+            onListingOpen?.(next);
+          }}>
             <div className="listing-card-title">{l.property_type} — {l.location} — SGD {formatPriceM(l.price)}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <button
@@ -1088,7 +1092,11 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
 
       {activeTab === 'deleted' && deletedListings.map(l => (
         <div key={l.id} className="listing-card">
-          <div className="listing-card-header" onClick={() => setExpanded(expanded === l.id ? null : l.id)}>
+          <div className="listing-card-header" onClick={() => {
+            const next = expanded === l.id ? null : l.id;
+            setExpanded(next);
+            onListingOpen?.(next);
+          }}>
             <div className="listing-card-title">{l.property_type} — {l.location} — SGD {formatPriceM(l.price)}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <button

@@ -18,6 +18,7 @@ import PublicListing from './pages/PublicListing';
 import InstagramCallback from './pages/InstagramCallback';
 import FacebookCallback from './pages/FacebookCallback';
 import ResetPassword from './pages/ResetPassword';
+import ChatWidget from './pages/ChatWidget';
 
 const LOGO = '/logo_2.png';
 
@@ -116,6 +117,7 @@ function AuthenticatedApp() {
   const [listingsTab, setListingsTab] = useState('active');
   const [selectedBuyerId, setSelectedBuyerId] = useState(null);
   const [selectedSellerId, setSelectedSellerId] = useState(null);
+  const [activeListingId, setActiveListingId] = useState(null);
 
   const handleEditListing = (listing) => {
     setEditingListing(listing);
@@ -131,6 +133,7 @@ function AuthenticatedApp() {
     setEditingListing(null);
     setSelectedBuyerId(null);
     setSelectedSellerId(null);
+    setActiveListingId(null);  // leaving the page a listing was open on -- drop the assistant's context
     setPage(p);
   };
 
@@ -161,7 +164,7 @@ function AuthenticatedApp() {
     switch(page) {
       case 'Dashboard': return <Dashboard agent={agent} token={token} setPage={navigateTo} />;
       case 'New Listing': return <NewListing agent={agent} token={token} editingListing={editingListing} onDoneEditing={() => { setEditingListing(null); setPage('My Listings'); }} />;
-      case 'My Listings': return <MyListings agent={agent} token={token} onEdit={handleEditListing} listingsTab={listingsTab} />;
+      case 'My Listings': return <MyListings agent={agent} token={token} onEdit={handleEditListing} listingsTab={listingsTab} onListingOpen={setActiveListingId} />;
       case 'Enquiries': return <Enquiries agent={agent} token={token} />;
       case 'Buyer Management': return selectedBuyerId
         ? <BuyerProfile token={token} buyerId={selectedBuyerId} onBack={() => setSelectedBuyerId(null)} />
@@ -194,6 +197,7 @@ function AuthenticatedApp() {
         <Header agent={agent} />
         {renderPage()}
       </div>
+      <ChatWidget token={token} activeListingId={activeListingId} />
     </div>
   );
 }
