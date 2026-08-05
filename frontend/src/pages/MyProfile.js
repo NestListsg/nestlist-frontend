@@ -28,6 +28,7 @@ export default function MyProfile({ agent, token, onUpdate }) {
   const [photoUrl, setPhotoUrl] = useState(agent.photo_url || '');
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState('');
+  const [greetingCopied, setGreetingCopied] = useState(false);
   const [posterTemplates, setPosterTemplates] = useState([]);
   const [changingEmail, setChangingEmail] = useState(false);
   const [newEmail, setNewEmail] = useState('');
@@ -136,6 +137,22 @@ export default function MyProfile({ agent, token, onUpdate }) {
     } catch (err) {
       setPollError(err.message);
       setConnecting(false);
+    }
+  };
+
+  // Suggested WhatsApp Business "Greeting message" -- this only replicates a
+  // buyer's very first automated reply (a free WhatsApp Business App setting
+  // the agent enables on their own phone, not something NestList can toggle
+  // for them via API). See the guide box below for why.
+  const suggestedGreeting = `Hi! Thanks for reaching out about my listing 🏡 I'll get back to you shortly -- in the meantime, let me know your preferred date/time for a viewing, or any questions about the property.\n\n${form.name || agent.name || ''}${form.agency ? ` | ${form.agency}` : ''}`;
+
+  const handleCopyGreeting = async () => {
+    try {
+      await navigator.clipboard.writeText(suggestedGreeting);
+      setGreetingCopied(true);
+      setTimeout(() => setGreetingCopied(false), 2000);
+    } catch (err) {
+      // clipboard API unavailable -- agent can still select and copy manually from the box
     }
   };
 
@@ -456,6 +473,33 @@ export default function MyProfile({ agent, token, onUpdate }) {
             </div>
           </div>
         )}
+
+        <div className="form-group" style={{
+          background: 'rgba(212,175,55,0.06)', border: '1px solid rgba(212,175,55,0.25)',
+          borderRadius: '4px', padding: '16px 18px', marginTop: '4px'
+        }}>
+          <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#F0C84A', marginBottom: '6px' }}>
+            💬 Auto-reply instantly to buyers who message you on WhatsApp
+          </div>
+          <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.6)', lineHeight: '1.6', marginBottom: '10px' }}>
+            This is a free setting inside the <strong>WhatsApp Business App</strong> (not NestList) — we can't switch it on for you since WhatsApp doesn't offer an API for that, but it takes under a minute and pairs with every WhatsApp link NestList already generates for you (share captions, buyer contact links):
+          </div>
+          <ol style={{ fontSize: '12px', color: 'rgba(248,244,236,0.7)', lineHeight: '1.8', paddingLeft: '18px', marginBottom: '12px' }}>
+            <li>If you're using personal WhatsApp, download the free <strong>WhatsApp Business</strong> app instead (your number and chat history carry over).</li>
+            <li>Open <strong>Settings → Business tools → Greeting message</strong>.</li>
+            <li>Turn it on, set "Send to" to <strong>Everyone</strong>, and paste the message below.</li>
+          </ol>
+          <div style={{
+            background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(212,175,55,0.2)',
+            borderRadius: '4px', padding: '12px 14px', fontSize: '12px',
+            color: 'rgba(248,244,236,0.85)', whiteSpace: 'pre-wrap', marginBottom: '10px', lineHeight: '1.6'
+          }}>
+            {suggestedGreeting}
+          </div>
+          <button type="button" className="btn-gold" style={{ maxWidth: '200px' }} onClick={handleCopyGreeting}>
+            {greetingCopied ? '✅ Copied!' : '📋 Copy Suggested Greeting'}
+          </button>
+        </div>
 
         {agent.can_use_instagram_beta && (
           <div className="form-group">
