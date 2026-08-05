@@ -58,15 +58,21 @@ function generateCaption(listing, platform, style, pgLimit) {
   // PropertyGuru gets a plain description (no hashtags/emoji scaffolding --
   // portal listing fields aren't social captions), truncated to fit its
   // character cap. It DOES still honour the Quick Summary / Full Story /
-  // Both style toggle above, same as every other platform: Quick Summary
-  // uses the same key-facts bullets the other platforms' tldr version uses,
-  // Full Story and Both use the full write-up. The length picker (Full/
-  // Short/Brief) layers on top of whichever style is chosen, capping
+  // Both style toggle above, mirroring what every other platform's three
+  // styles actually contain: Quick Summary is bullets only, Full Story is
+  // prose only, Both is bullets THEN prose (matching the "AT A GLANCE" +
+  // "FULL STORY" pattern the other platforms use for Both -- previously
+  // this branch treated anything that wasn't Quick Summary as prose-only,
+  // which meant Both silently lost its bullets here). The length picker
+  // (Full/Short/Brief) layers on top of whichever style is chosen, capping
   // whatever text that style produced to the selected character limit.
   if (platform === 'propertyguru') {
     const limit = pgLimit || PROPERTYGURU_CHAR_LIMIT;
     const header = `${listing.property_type} | ${listing.location} | SGD ${formatPriceM(listing.price)}\n\n`;
-    const source = style === 'tldr' ? bullets : cleanContent;
+    let source;
+    if (style === 'tldr') source = bullets;
+    else if (style === 'combined') source = `KEY FACTS\n${bullets}\n\nTHE FULL STORY\n${cleanContent}`;
+    else source = cleanContent;
     return header + truncateToLimit(source, Math.max(0, limit - header.length));
   }
 
