@@ -19,11 +19,12 @@ import InstagramCallback from './pages/InstagramCallback';
 import FacebookCallback from './pages/FacebookCallback';
 import ResetPassword from './pages/ResetPassword';
 import ChatWidget from './pages/ChatWidget';
+import PropertyTaxCalculator from './pages/PropertyTaxCalculator';
 
 const LOGO = '/logo_2.png';
 
 function Sidebar({ page, setPage, agent, onLogout, isOpen, onClose, listingsTab, setListingsTab }) {
-  const navItems = ['Dashboard', 'New Listing', 'My Listings', 'Enquiries', 'Buyer Management', 'Sellers', 'Pricing Reports', 'Resources', 'My Profile', 'Billing'];
+  const navItems = ['Dashboard', 'New Listing', 'My Listings', 'Enquiries', 'Buyer Management', 'Sellers', 'Pricing Reports', 'Property Tax Calculator', 'Resources', 'My Profile', 'Billing'];
   const initials = agent?.name?.split(' ').slice(0,2).map(n => n[0]).join('').toUpperCase() || 'NL';
 
   const handleNavClick = (item) => {
@@ -173,6 +174,7 @@ function AuthenticatedApp() {
         ? <SellerProfile token={token} sellerId={selectedSellerId} onBack={() => setSelectedSellerId(null)} onConvertToListing={handleConvertSeller} />
         : <Sellers token={token} onSelectSeller={setSelectedSellerId} />;
       case 'Pricing Reports': return <PricingReports token={token} />;
+      case 'Property Tax Calculator': return <PropertyTaxCalculator />;
       case 'Resources': return <Resources />;
       case 'My Profile': return <MyProfile agent={agent} token={token} onUpdate={updateAgent} />;
       case 'Billing': return <Billing />;
