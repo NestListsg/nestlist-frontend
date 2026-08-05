@@ -14,6 +14,18 @@ const API = process.env.REACT_APP_API_URL || '';
 // adjust this one number if PropertyGuru's real limit turns out to differ.
 const PROPERTYGURU_CHAR_LIMIT = 2000;
 
+// Agents can additionally choose a shorter write-up than the 2000-char max --
+// useful when they want a punchier description, or just prefer PropertyGuru
+// listings to read like a summary rather than the full story. 'full' always
+// stays pinned to PROPERTYGURU_CHAR_LIMIT itself (so raising/lowering that one
+// constant moves the Full tier automatically); the shorter tiers are fixed
+// targets independent of it.
+const PROPERTYGURU_LENGTHS = [
+  { key: 'full', label: 'Full', limit: PROPERTYGURU_CHAR_LIMIT },
+  { key: 'short', label: 'Short', limit: 600 },
+  { key: 'brief', label: 'Brief', limit: 300 },
+];
+
 // Cuts at the last full sentence before the limit where possible, falling
 // back to the last full word, so a listing description never gets chopped
 // mid-word/mid-sentence -- that would look like a NestList bug, not a
@@ -27,7 +39,7 @@ function truncateToLimit(text, limit) {
   return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trim() + '…';
 }
 
-function generateCaption(listing, platform, style) {
+function generateCaption(listing, platform, style, pgLimit) {
   const listingUrl = `nestlist.sg/l/${listing.id}`;
   const cleanContent = (listing.content || '')
     .replace(/^---/gm, '')
@@ -44,8 +56,9 @@ function generateCaption(listing, platform, style) {
   // style branches below since a listing-portal description isn't styled
   // the way a social caption is -- the style toggle simply doesn't apply here.
   if (platform === 'propertyguru') {
+    const limit = pgLimit || PROPERTYGURU_CHAR_LIMIT;
     const header = `${listing.property_type} | ${listing.location} | SGD ${formatPriceM(listing.price)}\n\n`;
-    return header + truncateToLimit(cleanContent, PROPERTYGURU_CHAR_LIMIT - header.length);
+    return header + truncateToLimit(cleanContent, Math.max(0, limit - header.length));
   }
 
   const bullets = `• ${listing.land_size ? listing.land_size.toLocaleString() + ' sqft land' : 'Land on request'}
@@ -249,6 +262,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const [expanded, setExpanded] = useState(null);
   const [activePlatform, setActivePlatform] = useState({});
   const [captionStyle, setCaptionStyle] = useState({});
+  const [pgLength, setPgLength] = useState({});
   const [copied, setCopied] = useState({});
   const [deleting, setDeleting] = useState({});
   const [downloading, setDownloading] = useState({});
@@ -590,6 +604,8 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     });
   };
   const getCaptionStyle = (listingId) => captionStyle[listingId] || 'long';
+  const getPgLengthKey = (listingId) => pgLength[listingId] || 'full';
+  const getPgLengthLimit = (listingId) => (PROPERTYGURU_LENGTHS.find(t => t.key === getPgLengthKey(listingId)) || PROPERTYGURU_LENGTHS[0]).limit;
   const canWebShare = !!navigator.share;
   const activeListings = listings.filter(l => l.status !== 'archived');
   const deletedListings = listings.filter(l => l.status === 'archived');
@@ -986,6 +1002,30 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                     <div style={{ fontSize: '12px', color: '#F0C84A', fontWeight: 'bold', marginBottom: '8px' }}>
                       {p.emoji} {p.label}
                     </div>
+
+                    {p.key === 'propertyguru' && (
+                      <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+                        {PROPERTYGURU_LENGTHS.map(t => (
+                          <button
+                            key={t.key}
+                            onClick={() => setPgLength(pl => ({ ...pl, [l.id]: t.key }))}
+                            style={{
+                              background: getPgLengthKey(l.id) === t.key ? 'rgba(212,175,55,0.2)' : 'transparent',
+                              border: `1px solid ${getPgLengthKey(l.id) === t.key ? '#D4AF37' : 'rgba(212,175,55,0.25)'}`,
+                              color: getPgLengthKey(l.id) === t.key ? '#F0C84A' : 'rgba(248,244,236,0.5)',
+                              padding: '4px 10px',
+                              borderRadius: '3px',
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              fontFamily: "'Montserrat', sans-serif"
+                            }}
+                          >
+                            {t.label} ({t.limit.toLocaleString()})
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     <div style={{
                       background: 'rgba(0,0,0,0.3)',
                       border: '1px solid rgba(212,175,55,0.2)',
@@ -999,13 +1039,13 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       marginBottom: '12px',
                       lineHeight: '1.6'
                     }}>
-                      {generateCaption(l, p.key, getCaptionStyle(l.id))}
+                      {generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id))}
                     </div>
 
                     {p.key === 'propertyguru' && (
                       <div style={{ fontSize: '10.5px', color: 'rgba(248,244,236,0.45)', marginTop: '-6px', marginBottom: '12px' }}>
-                        {generateCaption(l, p.key, getCaptionStyle(l.id)).length.toLocaleString()} / {PROPERTYGURU_CHAR_LIMIT.toLocaleString()} characters
-                        {generateCaption(l, p.key, getCaptionStyle(l.id)).length >= PROPERTYGURU_CHAR_LIMIT && ' — trimmed to fit PropertyGuru\'s limit, double-check before posting'}
+                        {generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id)).length.toLocaleString()} / {getPgLengthLimit(l.id).toLocaleString()} characters
+                        {generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id)).length >= getPgLengthLimit(l.id) && ' — trimmed to fit this length, double-check before posting'}
                       </div>
                     )}
 
@@ -1019,14 +1059,14 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       <button
                         className="btn-primary"
                         style={{ maxWidth: '180px' }}
-                        onClick={() => handleCopy(l.id, p.key, generateCaption(l, p.key, getCaptionStyle(l.id)))}
+                        onClick={() => handleCopy(l.id, p.key, generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id)))}
                       >
                         {copied[`${l.id}-${p.key}`] ? '✅ Copied!' : '📋 Copy Caption'}
                       </button>
 
                       {canWebShare && (
                         <button
-                          onClick={() => handleWebShare(l, p.key, generateCaption(l, p.key, getCaptionStyle(l.id)))}
+                          onClick={() => handleWebShare(l, p.key, generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id)))}
                           style={{
                             background: 'transparent',
                             border: '1px solid rgba(212,175,55,0.4)',
@@ -1043,7 +1083,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       )}
 
                       <a
-                        href={p.key === 'whatsapp' ? buildWhatsAppShareUrl(l, generateCaption(l, p.key, getCaptionStyle(l.id))) : p.url}
+                        href={p.key === 'whatsapp' ? buildWhatsAppShareUrl(l, generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id))) : p.url}
                         target="_blank"
                         rel="noreferrer"
                         style={{
