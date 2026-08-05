@@ -115,7 +115,7 @@ Available for private viewing. Connect with me or visit ${listingUrl}.
 
     whatsapp: `Hi! Quick summary of a new listing:
 
-🏡 *${listing.property_type}*
+*${listing.property_type}*
 📍 ${listing.location}
 💰 SGD ${formatPriceM(listing.price)}
 
@@ -161,7 +161,7 @@ Reach me at ${listingUrl} or reply directly to this post.
 
     whatsapp: `Hi! I have a new property listing that may interest you.
 
-🏡 *${listing.property_type}*
+*${listing.property_type}*
 📍 ${listing.location}
 💰 SGD ${formatPriceM(listing.price)}
 
@@ -217,7 +217,7 @@ Available for private viewing. Reach me at ${listingUrl} or reply directly.
 
     whatsapp: `Hi! I have a new property listing that may interest you.
 
-🏡 *${listing.property_type}*
+*${listing.property_type}*
 📍 ${listing.location}
 💰 SGD ${formatPriceM(listing.price)}
 
@@ -269,13 +269,26 @@ const STYLES = [
   { key: 'combined', label: '📖⚡ Both' },
 ];
 
+// Persisted across tab switches -- this page's component unmounts on tab
+// switch like every other page in the app, so plain useState alone would
+// collapse the open listing every time the agent navigates away and back.
+const EXPANDED_STORAGE_KEY = 'nestlist_expanded_listing';
+
+function loadPersistedExpanded() {
+  try {
+    return localStorage.getItem(EXPANDED_STORAGE_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
 export default function MyListings({ agent, token, onEdit, listingsTab, onListingOpen }) {
   const [listings, setListings] = useState([]);
   const activeTab = listingsTab || 'active';
   const [removingPermanently, setRemovingPermanently] = useState({});
   const [restoring, setRestoring] = useState({});
   const [removePermanentlyError, setRemovePermanentlyError] = useState({});
-  const [expanded, setExpanded] = useState(null);
+  const [expanded, setExpanded] = useState(loadPersistedExpanded);
   const [activePlatform, setActivePlatform] = useState({});
   const [captionStyle, setCaptionStyle] = useState({});
   const [pgLength, setPgLength] = useState({});
@@ -312,6 +325,14 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       .then(data => setListings(Array.isArray(data) ? data : []))
       .catch(() => setListings([]));
   }, [token]);
+
+  // Restore the chatbot's listing context on mount to match whichever card
+  // was left expanded before the agent last navigated away -- otherwise
+  // Mary wouldn't know a listing is open until the agent re-toggles it.
+  useEffect(() => {
+    if (expanded) onListingOpen?.(expanded);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     fetch(`${API}/api/poster-templates`, {
@@ -611,6 +632,17 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     }
   };
 
+  const updateExpanded = (next) => {
+    setExpanded(next);
+    try {
+      if (next) localStorage.setItem(EXPANDED_STORAGE_KEY, next);
+      else localStorage.removeItem(EXPANDED_STORAGE_KEY);
+    } catch {
+      // localStorage unavailable (e.g. private browsing) -- expansion just won't persist, not fatal
+    }
+    onListingOpen?.(next);
+  };
+
   const getSelectedPlatforms = (listingId) => activePlatform[listingId] || ['facebook'];
   const togglePlatform = (listingId, key) => {
     setActivePlatform(a => {
@@ -640,8 +672,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         <div key={l.id} className="listing-card">
           <div className="listing-card-header" onClick={() => {
             const next = expanded === l.id ? null : l.id;
-            setExpanded(next);
-            onListingOpen?.(next);
+            updateExpanded(next);
           }}>
             <div className="listing-card-title">{l.property_type} — {l.location} — SGD {formatPriceM(l.price)}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1192,8 +1223,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         <div key={l.id} className="listing-card">
           <div className="listing-card-header" onClick={() => {
             const next = expanded === l.id ? null : l.id;
-            setExpanded(next);
-            onListingOpen?.(next);
+            updateExpanded(next);
           }}>
             <div className="listing-card-title">{l.property_type} — {l.location} — SGD {formatPriceM(l.price)}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
