@@ -331,7 +331,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   // Mary wouldn't know a listing is open until the agent re-toggles it.
   useEffect(() => {
     if (expanded) onListingOpen?.(expanded);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line
   }, []);
 
   useEffect(() => {
