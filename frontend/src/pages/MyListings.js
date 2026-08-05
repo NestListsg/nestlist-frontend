@@ -237,6 +237,8 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
   const [fbPostSuccess, setFbPostSuccess] = useState({});
   const [posterTemplates, setPosterTemplates] = useState([]);
   const [posterTemplateChoice, setPosterTemplateChoice] = useState({});
+  const [videoTemplates, setVideoTemplates] = useState([]);
+  const [videoTemplateChoice, setVideoTemplateChoice] = useState({});
 
   useEffect(() => {
     fetch(`${API}/api/listings?status=all`, {
@@ -256,8 +258,20 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
       .catch(() => setPosterTemplates([]));
   }, [token]);
 
+  useEffect(() => {
+    fetch(`${API}/api/video-templates`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(data => setVideoTemplates(Array.isArray(data) ? data : []))
+      .catch(() => setVideoTemplates([]));
+  }, [token]);
+
   const selectedTemplateFor = (listing) =>
     posterTemplateChoice[listing.id] || listing.poster_template_id || agent.poster_template_id || 'editorial';
+
+  const selectedVideoTemplateFor = (listing) =>
+    videoTemplateChoice[listing.id] || listing.video_template_id || 'classic';
 
   const handleCopy = (listingId, platform, text) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -432,13 +446,14 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
     setVideoLoading(v => ({ ...v, [listing.id]: true }));
     setVideoError(e => ({ ...e, [listing.id]: '' }));
     try {
-      const res = await fetch(`${API}/api/listings/${listing.id}/generate-video`, {
+      const videoTemplateId = selectedVideoTemplateFor(listing);
+      const res = await fetch(`${API}/api/listings/${listing.id}/generate-video?video_template_id=${videoTemplateId}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed to generate video');
-      setListings(prev => prev.map(l => l.id === listing.id ? { ...l, video_url: data.video_url } : l));
+      setListings(prev => prev.map(l => l.id === listing.id ? { ...l, video_url: data.video_url, video_template_id: data.video_template_id } : l));
     } catch (err) {
       setVideoError(e => ({ ...e, [listing.id]: err.message }));
     } finally {
@@ -808,8 +823,35 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
                     <div style={{ color: '#e08080', fontSize: '12px', marginTop: '8px' }}>{posterError[l.id]}</div>
                   )}
 
+                  {videoTemplates.length > 0 && (
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '14px', marginBottom: '10px' }}>
+                      {videoTemplates.map(t => {
+                        const selected = selectedVideoTemplateFor(l) === t.id;
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => setVideoTemplateChoice(c => ({ ...c, [l.id]: t.id }))}
+                            style={{
+                              background: selected ? 'rgba(212,175,55,0.2)' : 'transparent',
+                              border: `1px solid ${selected ? '#D4AF37' : 'rgba(212,175,55,0.25)'}`,
+                              color: selected ? '#F0C84A' : 'rgba(248,244,236,0.7)',
+                              padding: '6px 14px',
+                              borderRadius: '3px',
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              fontFamily: "'Montserrat', sans-serif"
+                            }}
+                          >
+                            {selected ? '✓ ' : ''}{t.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {l.video_url && (
-                    <div style={{ marginTop: '14px', marginBottom: '10px' }}>
+                    <div style={{ marginBottom: '10px' }}>
                       <video
                         src={l.video_url}
                         controls
@@ -817,7 +859,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab }) {
                       />
                     </div>
                   )}
-                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', marginTop: l.video_url ? '0' : '14px' }}>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                     <button
                       className="btn-primary"
                       style={{ maxWidth: '220px' }}
