@@ -4,6 +4,29 @@ import MatchingBuyers from '../components/MatchingBuyers';
 
 const API = process.env.REACT_APP_API_URL || '';
 
+// PropertyGuru's listing description field enforces a hard character cap --
+// unlike Facebook/Instagram/LinkedIn/WhatsApp, which comfortably fit our full
+// write-up as-is. This constant (and truncateToLimit below) is only ever read
+// from the 'propertyguru' branch inside generateCaption, so tightening or
+// loosening it can never affect how much text any other platform gets --
+// each platform keeps its own separately-defined template, untouched.
+// Set to 2000 per Janel's own experience actually submitting listings there;
+// adjust this one number if PropertyGuru's real limit turns out to differ.
+const PROPERTYGURU_CHAR_LIMIT = 2000;
+
+// Cuts at the last full sentence before the limit where possible, falling
+// back to the last full word, so a listing description never gets chopped
+// mid-word/mid-sentence -- that would look like a NestList bug, not a
+// deliberate truncation, to whoever reads it on PropertyGuru.
+function truncateToLimit(text, limit) {
+  if (text.length <= limit) return text;
+  const cut = text.slice(0, limit);
+  const lastPeriod = cut.lastIndexOf('. ');
+  if (lastPeriod > limit * 0.6) return cut.slice(0, lastPeriod + 1);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trim() + '…';
+}
+
 function generateCaption(listing, platform, style) {
   const listingUrl = `nestlist.sg/l/${listing.id}`;
   const cleanContent = (listing.content || '')
@@ -14,6 +37,16 @@ function generateCaption(listing, platform, style) {
     .trim();
   const body = cleanContent.slice(0, 800);
   const shortBody = cleanContent.slice(0, 300);
+
+  // PropertyGuru gets a plain, full-length description (no hashtags/emoji
+  // scaffolding -- portal listing fields aren't social captions) truncated
+  // to fit its character cap. This check runs before the tldr/long/combined
+  // style branches below since a listing-portal description isn't styled
+  // the way a social caption is -- the style toggle simply doesn't apply here.
+  if (platform === 'propertyguru') {
+    const header = `${listing.property_type} | ${listing.location} | SGD ${formatPriceM(listing.price)}\n\n`;
+    return header + truncateToLimit(cleanContent, PROPERTYGURU_CHAR_LIMIT - header.length);
+  }
 
   const bullets = `• ${listing.land_size ? listing.land_size.toLocaleString() + ' sqft land' : 'Land on request'}
 • ${listing.built_up ? listing.built_up.toLocaleString() + ' sqft built-up' : 'Built-up on request'}
@@ -190,6 +223,7 @@ const PLATFORMS = [
   { key: 'linkedin', label: 'LinkedIn', emoji: '💼', url: 'https://www.linkedin.com/feed' },
   { key: 'whatsapp', label: 'WhatsApp', emoji: '💬', url: 'https://web.whatsapp.com' },
   { key: 'tiktok', label: 'TikTok', emoji: '🎵', url: 'https://www.tiktok.com/upload' },
+  { key: 'propertyguru', label: 'PropertyGuru', emoji: '🏘️', url: 'https://www.propertyguru.com.sg' },
 ];
 
 // wa.me pre-fills the message text (caption + listing link) so agents land in a
@@ -967,6 +1001,13 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                     }}>
                       {generateCaption(l, p.key, getCaptionStyle(l.id))}
                     </div>
+
+                    {p.key === 'propertyguru' && (
+                      <div style={{ fontSize: '10.5px', color: 'rgba(248,244,236,0.45)', marginTop: '-6px', marginBottom: '12px' }}>
+                        {generateCaption(l, p.key, getCaptionStyle(l.id)).length.toLocaleString()} / {PROPERTYGURU_CHAR_LIMIT.toLocaleString()} characters
+                        {generateCaption(l, p.key, getCaptionStyle(l.id)).length >= PROPERTYGURU_CHAR_LIMIT && ' — trimmed to fit PropertyGuru\'s limit, double-check before posting'}
+                      </div>
+                    )}
 
                     {p.key !== 'whatsapp' && (
                       <div style={{ fontSize: '11px', color: 'rgba(248,244,236,0.5)', marginBottom: '10px' }}>
