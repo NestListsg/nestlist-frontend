@@ -447,7 +447,8 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     setVideoError(e => ({ ...e, [listing.id]: '' }));
     try {
       const videoTemplateId = selectedVideoTemplateFor(listing);
-      const res = await fetch(`${API}/api/listings/${listing.id}/generate-video?video_template_id=${videoTemplateId}`, {
+      const photoIndex = posterPhotoIndex[listing.id] || 0;
+      const res = await fetch(`${API}/api/listings/${listing.id}/generate-video?video_template_id=${videoTemplateId}&photo_index=${photoIndex}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -638,7 +639,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                               background: 'rgba(240,200,74,0.9)', color: '#1a1a2e',
                               borderRadius: '3px', fontSize: '9px', padding: '2px 6px', fontWeight: 'bold'
                             }}>
-                              ★ POSTER
+                              ★ FEATURED
                             </div>
                           )}
                           <button
@@ -740,7 +741,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                   borderBottom: '1px solid rgba(212,175,55,0.15)'
                 }}>
                   <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '10px' }}>
-                    Branded poster for your post/story. Click a photo above (marked ★ POSTER) to choose the background.
+                    Branded poster for your post/story. Click a photo above (marked ★ FEATURED) to choose the background — the same photo is also used as the video's background below.
                   </div>
 
                   {posterTemplates.length > 0 && (
