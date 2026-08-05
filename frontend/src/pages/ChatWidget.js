@@ -14,6 +14,7 @@ function MaryAvatar({ size = 32 }) {
       height={size}
       style={{
         flexShrink: 0,
+        boxSizing: 'border-box',
         width: size,
         height: size,
         borderRadius: '50%',
@@ -81,14 +82,14 @@ export default function ChatWidget({ token, activeListingId }) {
         title="Ask Mary"
         style={{
           position: 'fixed', bottom: '24px', right: '24px', zIndex: 1000,
-          width: '56px', height: '56px', borderRadius: '50%',
+          width: '56px', height: '56px', borderRadius: '50%', padding: 0,
           background: '#D4AF37', border: 'none', cursor: 'pointer',
           boxShadow: '0 6px 20px rgba(0,0,0,0.4)',
           fontSize: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: '#14231b'
         }}
       >
-        {open ? '✕' : <MaryAvatar size={34} />}
+        {open ? '✕' : <MaryAvatar size={54} />}
       </button>
 
       {open && (
