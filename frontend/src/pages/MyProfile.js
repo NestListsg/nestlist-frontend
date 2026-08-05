@@ -144,7 +144,7 @@ export default function MyProfile({ agent, token, onUpdate }) {
   // buyer's very first automated reply (a free WhatsApp Business App setting
   // the agent enables on their own phone, not something NestList can toggle
   // for them via API). See the guide box below for why.
-  const suggestedGreeting = `Hi! Thanks for reaching out about my listing 🏡 I'll get back to you shortly -- in the meantime, let me know your preferred date/time for a viewing, or any questions about the property.\n\n${form.name || agent.name || ''}${form.agency ? ` | ${form.agency}` : ''}`;
+  const suggestedGreeting = `Hi! Thanks for reaching out about my listing. I'll get back to you shortly -- in the meantime, let me know your preferred date/time for a viewing, or any questions about the property.\n\n${form.name || agent.name || ''}${form.agency ? ` | ${form.agency}` : ''}`;
 
   const handleCopyGreeting = async () => {
     try {
