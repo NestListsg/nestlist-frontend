@@ -3,8 +3,8 @@ import React, { useState, useRef, useEffect } from 'react';
 const API = process.env.REACT_APP_API_URL || '';
 
 // Mary's avatar -- a custom illustrated portrait (Jane's own asset, served as a
-// static file at /mary-avatar.png) rather than a drawn icon, ringed in the app's
-// gold to match its other branded marks.
+// static file at /mary-avatar.png) rather than a drawn icon. No border -- the
+// portrait's own soft off-white edge reads better small than a gold ring did.
 function MaryAvatar({ size = 32 }) {
   return (
     <img
@@ -18,7 +18,6 @@ function MaryAvatar({ size = 32 }) {
         width: size,
         height: size,
         borderRadius: '50%',
-        border: '1.5px solid #D4AF37',
         objectFit: 'cover',
         display: 'block'
       }}
@@ -89,7 +88,7 @@ export default function ChatWidget({ token, activeListingId }) {
           color: '#14231b'
         }}
       >
-        {open ? '✕' : <MaryAvatar size={54} />}
+        {open ? '✕' : <MaryAvatar size={56} />}
       </button>
 
       {open && (
