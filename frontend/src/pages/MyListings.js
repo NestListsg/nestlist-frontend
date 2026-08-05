@@ -33,10 +33,16 @@ const PROPERTYGURU_LENGTHS = [
 function truncateToLimit(text, limit) {
   if (text.length <= limit) return text;
   const cut = text.slice(0, limit);
-  const lastPeriod = cut.lastIndexOf('. ');
-  if (lastPeriod > limit * 0.6) return cut.slice(0, lastPeriod + 1);
-  const lastSpace = cut.lastIndexOf(' ');
-  return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trim() + '…';
+  // Sentence endings in our write-ups are usually followed by a paragraph
+  // break (".\n\n"), not a literal ". " -- matching only a literal space
+  // here missed those, so a valid stopping point right at a paragraph's end
+  // was skipped in favour of chopping into the middle of the next sentence.
+  // \s (any whitespace) or end-of-string catches both cases.
+  const sentenceEnds = [...cut.matchAll(/[.!?](?=\s|$)/g)];
+  const lastSentenceEnd = sentenceEnds.length ? sentenceEnds[sentenceEnds.length - 1].index : -1;
+  if (lastSentenceEnd > limit * 0.6) return cut.slice(0, lastSentenceEnd + 1).trimEnd();
+  const lastBreak = Math.max(cut.lastIndexOf('\n'), cut.lastIndexOf(' '));
+  return (lastBreak > 0 ? cut.slice(0, lastBreak) : cut).trim() + '…';
 }
 
 function generateCaption(listing, platform, style, pgLimit) {
