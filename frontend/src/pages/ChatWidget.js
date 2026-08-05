@@ -2,33 +2,26 @@ import React, { useState, useRef, useEffect } from 'react';
 
 const API = process.env.REACT_APP_API_URL || '';
 
-// Mary's avatar -- a simple gold-on-dark face in the same visual language as the
-// app's other branded marks, with a slow natural blink so she reads as "alive"
-// rather than a static icon. Kept minimal (no cartoon exaggeration) to match the
-// Prestige brand's restrained luxury tone.
+// Mary's avatar -- a custom illustrated portrait (Jane's own asset, served as a
+// static file at /mary-avatar.png) rather than a drawn icon, ringed in the app's
+// gold to match its other branded marks.
 function MaryAvatar({ size = 32 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
-      <style>{`
-        @keyframes maryBlink {
-          0%, 92%, 100% { transform: scaleY(1); }
-          96% { transform: scaleY(0.12); }
-        }
-        .mary-eye {
-          transform-box: fill-box;
-          transform-origin: center;
-          animation: maryBlink 4.5s ease-in-out infinite;
-        }
-        .mary-eye-r { animation-delay: 0.15s; }
-        @media (prefers-reduced-motion: reduce) {
-          .mary-eye { animation: none; }
-        }
-      `}</style>
-      <circle cx="20" cy="20" r="18.5" fill="#14231b" stroke="#D4AF37" strokeWidth="1.5" />
-      <ellipse className="mary-eye" cx="14.5" cy="18" rx="2.1" ry="2.6" fill="#F0C84A" />
-      <ellipse className="mary-eye mary-eye-r" cx="25.5" cy="18" rx="2.1" ry="2.6" fill="#F0C84A" />
-      <path d="M14 26.5 Q20 30.5 26 26.5" stroke="#F0C84A" strokeWidth="1.6" strokeLinecap="round" fill="none" />
-    </svg>
+    <img
+      src="/mary-avatar.png"
+      alt="Mary"
+      width={size}
+      height={size}
+      style={{
+        flexShrink: 0,
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        border: '1.5px solid #D4AF37',
+        objectFit: 'cover',
+        display: 'block'
+      }}
+    />
   );
 }
 
