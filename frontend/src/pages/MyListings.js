@@ -50,21 +50,25 @@ function generateCaption(listing, platform, style, pgLimit) {
   const body = cleanContent.slice(0, 800);
   const shortBody = cleanContent.slice(0, 300);
 
-  // PropertyGuru gets a plain, full-length description (no hashtags/emoji
-  // scaffolding -- portal listing fields aren't social captions) truncated
-  // to fit its character cap. This check runs before the tldr/long/combined
-  // style branches below since a listing-portal description isn't styled
-  // the way a social caption is -- the style toggle simply doesn't apply here.
-  if (platform === 'propertyguru') {
-    const limit = pgLimit || PROPERTYGURU_CHAR_LIMIT;
-    const header = `${listing.property_type} | ${listing.location} | SGD ${formatPriceM(listing.price)}\n\n`;
-    return header + truncateToLimit(cleanContent, Math.max(0, limit - header.length));
-  }
-
   const bullets = `• ${listing.land_size ? listing.land_size.toLocaleString() + ' sqft land' : 'Land on request'}
 • ${listing.built_up ? listing.built_up.toLocaleString() + ' sqft built-up' : 'Built-up on request'}
 • ${listing.bedrooms ? listing.bedrooms + ' Bedrooms' : 'Bedrooms on request'}
 • ${listing.features || 'Premium features throughout'}`;
+
+  // PropertyGuru gets a plain description (no hashtags/emoji scaffolding --
+  // portal listing fields aren't social captions), truncated to fit its
+  // character cap. It DOES still honour the Quick Summary / Full Story /
+  // Both style toggle above, same as every other platform: Quick Summary
+  // uses the same key-facts bullets the other platforms' tldr version uses,
+  // Full Story and Both use the full write-up. The length picker (Full/
+  // Short/Brief) layers on top of whichever style is chosen, capping
+  // whatever text that style produced to the selected character limit.
+  if (platform === 'propertyguru') {
+    const limit = pgLimit || PROPERTYGURU_CHAR_LIMIT;
+    const header = `${listing.property_type} | ${listing.location} | SGD ${formatPriceM(listing.price)}\n\n`;
+    const source = style === 'tldr' ? bullets : cleanContent;
+    return header + truncateToLimit(source, Math.max(0, limit - header.length));
+  }
 
   const tldr = {
     facebook: `🏡 ${listing.property_type} | ${listing.location}
