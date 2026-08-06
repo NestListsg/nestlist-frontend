@@ -968,7 +968,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       onClick={() => handleGenerateVideo(l)}
                       disabled={videoLoading[l.id]}
                     >
-                      {videoLoading[l.id] ? 'Generating video... (~20s)' : l.video_url ? '🎬 Regenerate Video' : '🎬 Generate Video'}
+                      {videoLoading[l.id] ? 'Generating video... (~1-2 min)' : l.video_url ? '🎬 Regenerate Video' : '🎬 Generate Video'}
                     </button>
                     {l.video_url && (
                       <button
