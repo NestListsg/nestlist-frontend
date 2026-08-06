@@ -252,7 +252,7 @@ const PLATFORMS = [
   { key: 'linkedin', label: 'LinkedIn', emoji: '💼', url: 'https://www.linkedin.com/feed' },
   { key: 'whatsapp', label: 'WhatsApp', emoji: '💬', url: 'https://web.whatsapp.com' },
   { key: 'tiktok', label: 'TikTok', emoji: '🎵', url: 'https://www.tiktok.com/upload' },
-  { key: 'propertyguru', label: 'PropertyGuru', emoji: '🏘️', url: 'https://www.propertyguru.com.sg' },
+  { key: 'propertyguru', label: 'PropertyGuru', emoji: '🏘️', url: 'https://accounts.propertyguru.com.sg/account/login?locale=en' },
 ];
 
 // wa.me pre-fills the message text (caption + listing link) so agents land in a
