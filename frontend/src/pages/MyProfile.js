@@ -25,6 +25,8 @@ export default function MyProfile({ agent, token, onUpdate }) {
   const [igConnectError, setIgConnectError] = useState('');
   const [fbConnecting, setFbConnecting] = useState(false);
   const [fbConnectError, setFbConnectError] = useState('');
+  const [liConnecting, setLiConnecting] = useState(false);
+  const [liConnectError, setLiConnectError] = useState('');
   const [photoUrl, setPhotoUrl] = useState(agent.photo_url || '');
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState('');
@@ -183,6 +185,21 @@ export default function MyProfile({ agent, token, onUpdate }) {
     } catch (err) {
       setFbConnectError(err.message);
       setFbConnecting(false);
+    }
+  };
+
+  const handleConnectLinkedIn = async () => {
+    setLiConnecting(true); setLiConnectError('');
+    try {
+      const res = await fetch(`${API}/api/profile/linkedin-connect-link`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Could not get connect link');
+      window.location.href = data.link;
+    } catch (err) {
+      setLiConnectError(err.message);
+      setLiConnecting(false);
     }
   };
 
@@ -538,6 +555,27 @@ export default function MyProfile({ agent, token, onUpdate }) {
                   {fbConnecting ? 'Redirecting to Facebook...' : 'Connect Facebook'}
                 </button>
                 {fbConnectError && <div className="error-msg">{fbConnectError}</div>}
+              </>
+            )}
+          </div>
+        )}
+
+        {agent.can_use_linkedin_beta && (
+          <div className="form-group">
+            {agent.linkedin_name ? (
+              <div className="success-msg">Connected as {agent.linkedin_name} on LinkedIn.</div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="btn-gold"
+                  style={{ maxWidth: '280px' }}
+                  onClick={handleConnectLinkedIn}
+                  disabled={liConnecting}
+                >
+                  {liConnecting ? 'Redirecting to LinkedIn...' : 'Connect LinkedIn'}
+                </button>
+                {liConnectError && <div className="error-msg">{liConnectError}</div>}
               </>
             )}
           </div>

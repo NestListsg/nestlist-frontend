@@ -17,6 +17,7 @@ import Billing from './pages/Billing';
 import PublicListing from './pages/PublicListing';
 import InstagramCallback from './pages/InstagramCallback';
 import FacebookCallback from './pages/FacebookCallback';
+import LinkedInCallback from './pages/LinkedInCallback';
 import ResetPassword from './pages/ResetPassword';
 import ChatWidget from './pages/ChatWidget';
 import PropertyTaxCalculator from './pages/PropertyTaxCalculator';
@@ -211,6 +212,7 @@ function App() {
         <Route path="/l/:listingId" element={<PublicListing />} />
         <Route path="/auth/instagram/callback" element={<InstagramCallback />} />
         <Route path="/auth/facebook/callback" element={<FacebookCallback />} />
+        <Route path="/auth/linkedin/callback" element={<LinkedInCallback />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<AuthenticatedApp />} />
       </Routes>

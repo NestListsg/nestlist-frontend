@@ -312,6 +312,10 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const [fbPosting, setFbPosting] = useState({});
   const [fbPostError, setFbPostError] = useState({});
   const [fbPostSuccess, setFbPostSuccess] = useState({});
+  const [liCaption, setLiCaption] = useState({});
+  const [liPosting, setLiPosting] = useState({});
+  const [liPostError, setLiPostError] = useState({});
+  const [liPostSuccess, setLiPostSuccess] = useState({});
   const [posterTemplates, setPosterTemplates] = useState([]);
   const [posterTemplateChoice, setPosterTemplateChoice] = useState({});
   const [videoTemplates, setVideoTemplates] = useState([]);
@@ -629,6 +633,27 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       setFbPostError(e => ({ ...e, [listing.id]: err.message }));
     } finally {
       setFbPosting(p => ({ ...p, [listing.id]: false }));
+    }
+  };
+
+  const handlePostLinkedIn = async (listing) => {
+    const caption = liCaption[listing.id] ?? generateCaption(listing, 'linkedin', getCaptionStyle(listing.id));
+    setLiPosting(p => ({ ...p, [listing.id]: true }));
+    setLiPostError(e => ({ ...e, [listing.id]: '' }));
+    setLiPostSuccess(s => ({ ...s, [listing.id]: '' }));
+    try {
+      const res = await fetch(`${API}/api/listings/${listing.id}/post-linkedin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ caption })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to post to LinkedIn');
+      setLiPostSuccess(s => ({ ...s, [listing.id]: '🚀 Posted to LinkedIn!' }));
+    } catch (err) {
+      setLiPostError(e => ({ ...e, [listing.id]: err.message }));
+    } finally {
+      setLiPosting(p => ({ ...p, [listing.id]: false }));
     }
   };
 
@@ -1203,6 +1228,34 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                         </div>
                         {fbPostError[l.id] && <div className="error-msg">{fbPostError[l.id]}</div>}
                         {fbPostSuccess[l.id] && <div className="success-msg">{fbPostSuccess[l.id]}</div>}
+                      </div>
+                    )}
+
+                    {p.key === 'linkedin' && agent.can_use_linkedin_beta && agent.linkedin_name && (
+                      <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(212,175,55,0.15)' }}>
+                        <label className="form-label">Post directly to LinkedIn ({agent.linkedin_name})</label>
+                        <textarea
+                          className="form-textarea"
+                          rows={4}
+                          value={liCaption[l.id] ?? generateCaption(l, 'linkedin', getCaptionStyle(l.id))}
+                          onChange={e => setLiCaption(c => ({ ...c, [l.id]: e.target.value }))}
+                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="btn-gold"
+                            style={{ maxWidth: '220px' }}
+                            onClick={() => handlePostLinkedIn(l)}
+                            disabled={liPosting[l.id]}
+                          >
+                            {liPosting[l.id] ? 'Posting...' : '🚀 Post to LinkedIn'}
+                          </button>
+                          {!l.poster_url && (
+                            <span style={{ fontSize: '11px', color: 'rgba(248,244,236,0.5)' }}>No poster yet — will post text only</span>
+                          )}
+                        </div>
+                        {liPostError[l.id] && <div className="error-msg">{liPostError[l.id]}</div>}
+                        {liPostSuccess[l.id] && <div className="success-msg">{liPostSuccess[l.id]}</div>}
                       </div>
                     )}
                   </div>
