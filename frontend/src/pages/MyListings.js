@@ -441,8 +441,14 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       const filename = `listing-photos-${listing.id.slice(0, 8)}.zip`;
       const file = new File([blob], filename, { type: blob.type || 'application/zip' });
 
+      // See handleDownloadFile's comment -- navigator.canShare/share exist on
+      // desktop Safari too, not just mobile, so this must be gated on an
+      // actual mobile/touch device or Mac agents get the OS share sheet
+      // instead of the ZIP landing in Downloads.
+      const isMobileOrTablet = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       let shared = false;
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      if (isMobileOrTablet && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({ files: [file] });
           shared = true;
@@ -482,7 +488,16 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       // no longer treated as a direct tap by the browser, so it silently does
       // nothing. The native share sheet (with a "Save Image"/"Save to Photos"
       // option) is the reliable way to save a file on mobile.
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      //
+      // navigator.canShare/share aren't mobile-exclusive though -- desktop Safari
+      // on macOS supports them too (desktop Chrome doesn't, which is why this
+      // never showed up in Chrome testing). Without gating on an actual
+      // mobile/touch device, agents on a Mac using Safari got the OS share sheet
+      // (AirDrop/Mail/Messages/...) instead of the file just landing in
+      // Downloads, which is what "Download" is supposed to do there.
+      const isMobileOrTablet = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS reports as a Mac
+      if (isMobileOrTablet && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file] });
         return;
       }
