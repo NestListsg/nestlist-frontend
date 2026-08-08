@@ -61,7 +61,7 @@ function buildLinkedInInsightCaption(listing, agent, marketPulse) {
   const hasGcbData = mp.gcb_transactions && mp.gcb_avg_psf;
 
   const marketLine = hasGcbData
-    ? `The Good Class Bungalow segment, usually the clearest signal for where landed sentiment sits, recorded ${mp.gcb_transactions} in ${period} at an average of ${mp.gcb_avg_psf} psf${mp.gcb_largest ? `, with the largest transaction closing at ${mp.gcb_largest}` : ''}.${mp.nassim_range ? ` Nassim Road continues to trade around ${mp.nassim_range} psf.` : ''}`
+    ? `The Good Class Bungalow segment, usually the clearest signal for where landed sentiment sits, recorded ${mp.gcb_transactions} in ${period} at an average of ${mp.gcb_avg_psf} psf${mp.gcb_largest ? `, with the largest transaction closing at ${mp.gcb_largest}` : ''}.${mp.nassim_range ? ` Nassim Road continues to trade around ${mp.nassim_range}.` : ''}`
     : `It's been a quieter month for reportable Good Class Bungalow transactions, though sentiment in the broader landed segment remains steady.`;
 
   const propertyContext = [
