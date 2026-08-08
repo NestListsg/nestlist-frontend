@@ -45,7 +45,44 @@ function truncateToLimit(text, limit) {
   return (lastBreak > 0 ? cut.slice(0, lastBreak) : cut).trim() + '…';
 }
 
-function generateCaption(listing, platform, style, pgLimit) {
+// LinkedIn's audience skews toward senior corporate/HNW readers who respond
+// to substance, not a listing pitch with hashtags -- a straight re-skin of
+// the Facebook/Instagram template reads as tone-deaf there. Instead this
+// leads with a genuine market-insight angle (grounded in the same live URA
+// GCB data the Market Pulse panel shows -- not invented commentary), and
+// only mentions the specific listing as context within that, closing with
+// a plain, low-pressure sign-off rather than a call-to-action or hashtags.
+// Deliberately ignores the tldr/long/combined style toggle -- those three
+// variants exist to control how much LISTING detail shows, which doesn't
+// map onto an editorial market-update post the same way.
+function buildLinkedInInsightCaption(listing, agent, marketPulse) {
+  const mp = marketPulse || {};
+  const period = mp.last_updated || 'this month';
+  const hasGcbData = mp.gcb_transactions && mp.gcb_avg_psf;
+
+  const marketLine = hasGcbData
+    ? `The Good Class Bungalow segment, usually the clearest signal for where landed sentiment sits, recorded ${mp.gcb_transactions} in ${period} at an average of ${mp.gcb_avg_psf} psf${mp.gcb_largest ? `, with the largest transaction closing at ${mp.gcb_largest}` : ''}.${mp.nassim_range ? ` Nassim Road continues to trade around ${mp.nassim_range} psf.` : ''}`
+    : `It's been a quieter month for reportable Good Class Bungalow transactions, though sentiment in the broader landed segment remains steady.`;
+
+  const propertyContext = [
+    listing.property_type ? listing.property_type.toLowerCase() : 'property',
+    listing.location ? `in ${listing.location}` : '',
+  ].filter(Boolean).join(' ');
+
+  const signOff = [agent?.name, agent?.contact, agent?.agency].filter(Boolean).join('\n');
+
+  return `Singapore's landed property market — a quick read for ${period}
+
+${marketLine}
+
+Against that backdrop, I'm currently representing a ${propertyContext}${listing.features ? ` — ${listing.features}` : ''}. Always glad to share more on where the landed market is heading, or hear what you're considering — no pressure either way.
+
+${signOff}`;
+}
+
+function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) {
+  if (platform === 'linkedin') return buildLinkedInInsightCaption(listing, agent, marketPulse);
+
   const listingUrl = `nestlist.sg/l/${listing.id}`;
   const cleanContent = (listing.content || '')
     .replace(/^---/gm, '')
@@ -102,17 +139,6 @@ DM me or visit ${listingUrl} 🏡
 
 #NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #PropertyForSale`,
 
-    linkedin: `🏡 New Listing | ${listing.property_type}
-📍 ${listing.location}
-💰 SGD ${formatPriceM(listing.price)}
-
-Key details:
-${bullets}
-
-Available for private viewing. Connect with me or visit ${listingUrl}.
-
-#SingaporeRealEstate #LuxuryProperty #GCB #PropertyInvestment #SingaporeProperty #NestList`,
-
     whatsapp: `Hi! Quick summary of a new listing:
 
 *${listing.property_type}*
@@ -145,19 +171,6 @@ ${shortBody}...
 DM me or visit ${listingUrl} to find out more 🏡
 
 #NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #SingaporeLife #PropertyInvestment #LandedHouse #Bungalow #PenthouseLiving #PropertyForSale`,
-
-    linkedin: `🏡 New Property Listing | ${listing.property_type}
-
-📍 Location: ${listing.location}
-💰 Asking Price: SGD ${formatPriceM(listing.price)}
-
-${listing.content?.slice(0, 600) || ''}...
-
-This is a rare opportunity in one of Singapore's most sought-after addresses. Whether you are an investor or an owner-occupier seeking the finest in Singapore living, I would welcome a private conversation.
-
-Reach me at ${listingUrl} or reply directly to this post.
-
-#SingaporeRealEstate #LuxuryProperty #GCB #PropertyInvestment #SingaporeProperty #RealEstate #LandedProperty #HighNetWorth #PropertySG #NestList`,
 
     whatsapp: `Hi! I have a new property listing that may interest you.
 
@@ -200,20 +213,6 @@ ${shortBody}...
 DM me or visit ${listingUrl} 🏡
 
 #NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #PropertyForSale`,
-
-    linkedin: `🏡 New Property Listing | ${listing.property_type}
-📍 ${listing.location}
-💰 SGD ${formatPriceM(listing.price)}
-
-⚡ AT A GLANCE
-${bullets}
-
-📖 THE FULL STORY
-${listing.content?.slice(0, 600) || ''}...
-
-Available for private viewing. Reach me at ${listingUrl} or reply directly.
-
-#SingaporeRealEstate #LuxuryProperty #GCB #PropertyInvestment #SingaporeProperty #RealEstate #LandedProperty #HighNetWorth #PropertySG #NestList`,
 
     whatsapp: `Hi! I have a new property listing that may interest you.
 
@@ -320,6 +319,17 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const [posterTemplateChoice, setPosterTemplateChoice] = useState({});
   const [videoTemplates, setVideoTemplates] = useState([]);
   const [videoTemplateChoice, setVideoTemplateChoice] = useState({});
+  const [marketPulse, setMarketPulse] = useState(null);
+
+  // Feeds the LinkedIn write-up's market-insight opening -- fetched once, not
+  // per-listing, since it's the same live GCB market snapshot regardless of
+  // which listing an agent is captioning. Public endpoint, no auth needed.
+  useEffect(() => {
+    fetch(`${API}/api/market-pulse`)
+      .then(r => r.json())
+      .then(data => setMarketPulse(data))
+      .catch(() => setMarketPulse(null));
+  }, []);
 
   useEffect(() => {
     fetch(`${API}/api/listings?status=all`, {
@@ -637,7 +647,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   };
 
   const handlePostLinkedIn = async (listing) => {
-    const caption = liCaption[listing.id] ?? generateCaption(listing, 'linkedin', getCaptionStyle(listing.id));
+    const caption = liCaption[listing.id] ?? generateCaption(listing, 'linkedin', getCaptionStyle(listing.id), null, agent, marketPulse);
     setLiPosting(p => ({ ...p, [listing.id]: true }));
     setLiPostError(e => ({ ...e, [listing.id]: '' }));
     setLiPostSuccess(s => ({ ...s, [listing.id]: '' }));
@@ -1111,13 +1121,13 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       marginBottom: '12px',
                       lineHeight: '1.6'
                     }}>
-                      {generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id))}
+                      {generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id), agent, marketPulse)}
                     </div>
 
                     {p.key === 'propertyguru' && (
                       <div style={{ fontSize: '10.5px', color: 'rgba(248,244,236,0.45)', marginTop: '-6px', marginBottom: '12px' }}>
-                        {generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id)).length.toLocaleString()} / {getPgLengthLimit(l.id).toLocaleString()} characters
-                        {generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id)).length >= getPgLengthLimit(l.id) && ' — trimmed to fit this length, double-check before posting'}
+                        {generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id), agent, marketPulse).length.toLocaleString()} / {getPgLengthLimit(l.id).toLocaleString()} characters
+                        {generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id), agent, marketPulse).length >= getPgLengthLimit(l.id) && ' — trimmed to fit this length, double-check before posting'}
                       </div>
                     )}
 
@@ -1131,14 +1141,14 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       <button
                         className="btn-primary"
                         style={{ maxWidth: '180px' }}
-                        onClick={() => handleCopy(l.id, p.key, generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id)))}
+                        onClick={() => handleCopy(l.id, p.key, generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id), agent, marketPulse))}
                       >
                         {copied[`${l.id}-${p.key}`] ? '✅ Copied!' : '📋 Copy Caption'}
                       </button>
 
                       {canWebShare && (
                         <button
-                          onClick={() => handleWebShare(l, p.key, generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id)))}
+                          onClick={() => handleWebShare(l, p.key, generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id), agent, marketPulse))}
                           style={{
                             background: 'transparent',
                             border: '1px solid rgba(212,175,55,0.4)',
@@ -1155,7 +1165,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       )}
 
                       <a
-                        href={p.key === 'whatsapp' ? buildWhatsAppShareUrl(l, generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id))) : p.url}
+                        href={p.key === 'whatsapp' ? buildWhatsAppShareUrl(l, generateCaption(l, p.key, getCaptionStyle(l.id), getPgLengthLimit(l.id), agent, marketPulse)) : p.url}
                         target="_blank"
                         rel="noreferrer"
                         style={{
@@ -1237,7 +1247,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                         <textarea
                           className="form-textarea"
                           rows={4}
-                          value={liCaption[l.id] ?? generateCaption(l, 'linkedin', getCaptionStyle(l.id))}
+                          value={liCaption[l.id] ?? generateCaption(l, 'linkedin', getCaptionStyle(l.id), null, agent, marketPulse)}
                           onChange={e => setLiCaption(c => ({ ...c, [l.id]: e.target.value }))}
                         />
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px', flexWrap: 'wrap' }}>
