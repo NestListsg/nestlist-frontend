@@ -303,6 +303,11 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const [deletingPhoto, setDeletingPhoto] = useState({});
   const [enhancingPhoto, setEnhancingPhoto] = useState({});
   const [enhancePhotoError, setEnhancePhotoError] = useState({});
+  const [editingContent, setEditingContent] = useState({});
+  const [editedContent, setEditedContent] = useState({});
+  const [contentSaving, setContentSaving] = useState({});
+  const [contentSaveError, setContentSaveError] = useState({});
+  const [contentSaveSuccess, setContentSaveSuccess] = useState({});
   const [igCaption, setIgCaption] = useState({});
   const [igPosting, setIgPosting] = useState({});
   const [igPostError, setIgPostError] = useState({});
@@ -657,6 +662,40 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     }
   };
 
+  const startEditContent = (listing) => {
+    setEditedContent(c => ({ ...c, [listing.id]: listing.content || '' }));
+    setContentSaveError(e => ({ ...e, [listing.id]: '' }));
+    setContentSaveSuccess(s => ({ ...s, [listing.id]: '' }));
+    setEditingContent(c => ({ ...c, [listing.id]: true }));
+  };
+
+  const cancelEditContent = (listingId) => {
+    setEditingContent(c => ({ ...c, [listingId]: false }));
+    setContentSaveError(e => ({ ...e, [listingId]: '' }));
+  };
+
+  const saveEditContent = async (listing) => {
+    setContentSaving(s => ({ ...s, [listing.id]: true }));
+    setContentSaveError(e => ({ ...e, [listing.id]: '' }));
+    try {
+      const res = await fetch(`${API}/api/listings/${listing.id}/content`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content: editedContent[listing.id] })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to save write-up');
+      setListings(prev => prev.map(l => l.id === listing.id ? { ...l, content: data.content } : l));
+      setEditingContent(c => ({ ...c, [listing.id]: false }));
+      setContentSaveSuccess(s => ({ ...s, [listing.id]: 'Write-up updated!' }));
+      setTimeout(() => setContentSaveSuccess(s => ({ ...s, [listing.id]: '' })), 3000);
+    } catch (err) {
+      setContentSaveError(e => ({ ...e, [listing.id]: err.message }));
+    } finally {
+      setContentSaving(s => ({ ...s, [listing.id]: false }));
+    }
+  };
+
   const handlePostInstagram = async (listing) => {
     const caption = igCaption[listing.id] ?? generateCaption(listing, 'instagram', getCaptionStyle(listing.id));
     setIgPosting(p => ({ ...p, [listing.id]: true }));
@@ -900,7 +939,45 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                 </div>
               )}
 
-              <div className="listing-card-body">{(l.content || '').replace(/\*\*/g, '').replace(/^#+\s/gm, '').replace(/---/g, '').trim()}</div>
+              {editingContent[l.id] ? (
+                <div style={{ margin: '16px 20px 0' }}>
+                  <textarea
+                    className="form-textarea"
+                    rows={16}
+                    value={editedContent[l.id] ?? ''}
+                    onChange={e => setEditedContent(c => ({ ...c, [l.id]: e.target.value }))}
+                  />
+                  {contentSaveError[l.id] && <div className="error-msg" style={{ marginTop: '8px' }}>{contentSaveError[l.id]}</div>}
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                    <button
+                      type="button" onClick={() => cancelEditContent(l.id)} disabled={contentSaving[l.id]}
+                      style={{
+                        background: 'transparent', border: '1px solid rgba(212,175,55,0.5)',
+                        color: '#F0C84A', padding: '8px 18px', borderRadius: '3px',
+                        cursor: 'pointer', fontSize: '13px', fontFamily: "'Montserrat', sans-serif"
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button className="btn-primary" type="button" onClick={() => saveEditContent(l)} disabled={contentSaving[l.id]} style={{ maxWidth: '160px' }}>
+                      {contentSaving[l.id] ? <><span className="spinner" />Saving...</> : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="listing-card-body">{(l.content || '').replace(/\*\*/g, '').replace(/^#+\s/gm, '').replace(/---/g, '').trim()}</div>
+                  <div style={{ margin: '4px 20px 0' }}>
+                    <button
+                      className="btn-gold" type="button" onClick={() => startEditContent(l)}
+                      style={{ maxWidth: '220px' }}
+                    >
+                      ✏️ Edit Write-Up
+                    </button>
+                    {contentSaveSuccess[l.id] && <div className="success-msg" style={{ marginTop: '10px' }}>{contentSaveSuccess[l.id]}</div>}
+                  </div>
+                </>
+              )}
 
               <MatchingBuyers
                 token={token}

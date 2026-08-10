@@ -54,6 +54,11 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const [photoError, setPhotoError] = useState('');
   const [uploadedPhotoUrls, setUploadedPhotoUrls] = useState([]);
   const [propertyTypeInvalid, setPropertyTypeInvalid] = useState(false);
+  const [editingContent, setEditingContent] = useState(false);
+  const [editedContent, setEditedContent] = useState('');
+  const [contentSaving, setContentSaving] = useState(false);
+  const [contentSaveError, setContentSaveError] = useState('');
+  const [contentSaveSuccess, setContentSaveSuccess] = useState('');
   const fileRef = useRef();
   const photoRef = useRef();
   const folderRef = useRef();
@@ -269,6 +274,40 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
 
   const removeUploadedPhoto = (indexToRemove) => {
     setUploadedPhotoUrls(prev => prev.filter((_, i) => i !== indexToRemove));
+  };
+
+  const startEditContent = () => {
+    setEditedContent(result.listing.content || '');
+    setContentSaveError('');
+    setContentSaveSuccess('');
+    setEditingContent(true);
+  };
+
+  const cancelEditContent = () => {
+    setEditingContent(false);
+    setContentSaveError('');
+  };
+
+  const saveEditContent = async () => {
+    setContentSaving(true);
+    setContentSaveError('');
+    try {
+      const res = await fetch(`${API}/api/listings/${result.listing.id}/content`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content: editedContent })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to save write-up');
+      setResult(r => ({ ...r, listing: { ...r.listing, content: data.content } }));
+      setEditingContent(false);
+      setContentSaveSuccess('Write-up updated!');
+      setTimeout(() => setContentSaveSuccess(''), 3000);
+    } catch (err) {
+      setContentSaveError(err.message);
+    } finally {
+      setContentSaving(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -525,7 +564,43 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
               <div className="divider" />
               <div className="section-label">Step 2 - Your Listing is Ready</div>
               <div className="listing-output">
-                <div className="listing-text">{result.listing.content}</div>
+                {editingContent ? (
+                  <>
+                    <textarea
+                      className="form-textarea"
+                      rows={16}
+                      value={editedContent}
+                      onChange={e => setEditedContent(e.target.value)}
+                    />
+                    {contentSaveError && <div className="error-msg" style={{ marginTop: '8px' }}>{contentSaveError}</div>}
+                    <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                      <button
+                        type="button" onClick={cancelEditContent} disabled={contentSaving}
+                        style={{
+                          background: 'transparent', border: '1px solid rgba(212,175,55,0.5)',
+                          color: '#F0C84A', padding: '8px 18px', borderRadius: '3px',
+                          cursor: 'pointer', fontSize: '13px', fontFamily: "'Montserrat', sans-serif"
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button className="btn-primary" type="button" onClick={saveEditContent} disabled={contentSaving} style={{ maxWidth: '160px' }}>
+                        {contentSaving ? <><span className="spinner" />Saving...</> : 'Save'}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="listing-text">{result.listing.content}</div>
+                    <button
+                      className="btn-gold" type="button" onClick={startEditContent}
+                      style={{ maxWidth: '220px', marginTop: '12px' }}
+                    >
+                      ✏️ Edit Write-Up
+                    </button>
+                    {contentSaveSuccess && <div className="success-msg" style={{ marginTop: '10px' }}>{contentSaveSuccess}</div>}
+                  </>
+                )}
               </div>
 
               <div className="divider" />
