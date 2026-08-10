@@ -176,10 +176,45 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         reader.readAsDataURL(file);
       });
 
+      // Downscale in the browser before uploading. The backend re-compresses
+      // every photo to max 1920px JPEG anyway, so sending an 8MB straight-off-
+      // the-camera original is pure wasted payload -- and worse than wasted:
+      // the production edge proxy kills request bodies over ~10MB mid-stream,
+      // which the browser reports as the unhelpful 'Failed to fetch' (this is
+      // exactly what broke Janel's photo upload). Resizing client-side to the
+      // same 1920px spec cuts each photo to a few hundred KB with zero
+      // difference in what actually gets stored. Falls back to the raw file
+      // bytes if the browser can't decode the format (e.g. HEIC on Chrome) --
+      // the backend can often still handle those.
+      const downscaleOrRead = (file) => new Promise((resolve) => {
+        const objectUrl = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          try {
+            const maxDim = 1920;
+            const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(img.width * scale));
+            canvas.height = Math.max(1, Math.round(img.height * scale));
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            resolve({ image_data: dataUrl.split(',')[1], media_type: 'image/jpeg' });
+          } catch {
+            readFile(file).then(resolve, () => resolve(null));
+          }
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          readFile(file).then(resolve, () => resolve(null));
+        };
+        img.src = objectUrl;
+      });
+
       const pdfFiles = files.filter(f => f.type === 'application/pdf');
       const imageFiles = files.filter(f => f.type.startsWith('image/'));
 
-      const imageResults = await Promise.all(imageFiles.map(readFile));
+      const imageResults = (await Promise.all(imageFiles.map(downscaleOrRead))).filter(Boolean);
 
       let pdfExtractedImages = [];
       if (pdfFiles.length > 0) {
@@ -202,14 +237,26 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       const images = [...imageResults, ...pdfExtractedImages].slice(0, 15);
       if (!images.length) throw new Error('No photos found to upload.');
 
-      const response = await fetch(`${API}/api/listings/${result.listing.id}/upload-images`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ images })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || 'Failed to upload photos');
-      setUploadedPhotoUrls(data.image_urls);
+      // Upload in small batches, sequentially, instead of one request carrying
+      // every photo -- a single request with 15 photos can still brush the
+      // proxy's ~10MB body ceiling even after downscaling. The first batch
+      // replaces the listing's photo set, subsequent batches append (backend's
+      // `append` flag), so the batches assemble into one ordered set.
+      const BATCH_SIZE = 4;
+      let finalUrls = [];
+      for (let start = 0; start < images.length; start += BATCH_SIZE) {
+        const batch = images.slice(start, start + BATCH_SIZE);
+        setPhotoLoadingLabel(`Uploading photos ${Math.min(start + batch.length, images.length)} of ${images.length}...`);
+        const response = await fetch(`${API}/api/listings/${result.listing.id}/upload-images`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ images: batch, append: start > 0 })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Failed to upload photos');
+        finalUrls = data.image_urls;
+      }
+      setUploadedPhotoUrls(finalUrls);
       const pdfNote = pdfExtractedImages.length > 0 ? ` (${pdfExtractedImages.length} extracted from PDF)` : '';
       setPhotoSuccess(`${images.length} photo${images.length > 1 ? 's' : ''} uploaded successfully!${pdfNote}`);
     } catch (err) {
