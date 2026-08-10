@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 import Login from './pages/Login';
@@ -24,8 +24,22 @@ import PropertyTaxCalculator from './pages/PropertyTaxCalculator';
 
 const LOGO = '/logo_2.png';
 
+// Internal pages aren't React Router routes -- App only has 3 real routes
+// (the public listing page, auth callbacks, reset-password) plus a catch-all
+// that renders AuthenticatedApp, which tracks the current page as plain
+// string state. These helpers translate between that state and a URL path,
+// so a typed/reloaded/shared /my-listings link and the browser back/forward
+// buttons work without pulling the whole nav into React Router.
+const NAV_ITEMS = ['Dashboard', 'New Listing', 'My Listings', 'Enquiries', 'Buyer Management', 'Sellers', 'Pricing Reports', 'Property Tax Calculator', 'Resources', 'My Profile', 'Billing'];
+const slugify = (item) => '/' + item.toLowerCase().replace(/\s+/g, '-');
+const PAGE_BY_SLUG = NAV_ITEMS.reduce((acc, item) => { acc[slugify(item)] = item; return acc; }, {});
+const pageFromPath = (pathname) => {
+  const trimmed = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+  return PAGE_BY_SLUG[trimmed.toLowerCase()] || 'Dashboard';
+};
+
 function Sidebar({ page, setPage, agent, onLogout, isOpen, onClose, listingsTab, setListingsTab }) {
-  const navItems = ['Dashboard', 'New Listing', 'My Listings', 'Enquiries', 'Buyer Management', 'Sellers', 'Pricing Reports', 'Property Tax Calculator', 'Resources', 'My Profile', 'Billing'];
+  const navItems = NAV_ITEMS;
   const initials = agent?.name?.split(' ').slice(0,2).map(n => n[0]).join('').toUpperCase() || 'NL';
 
   const handleNavClick = (item) => {
@@ -113,13 +127,35 @@ function Header({ agent }) {
 function AuthenticatedApp() {
   const [token, setToken] = useState(localStorage.getItem('nl_token'));
   const [agent, setAgent] = useState(JSON.parse(localStorage.getItem('nl_agent') || 'null'));
-  const [page, setPage] = useState('Dashboard');
+  const [page, setPage] = useState(() => pageFromPath(window.location.pathname));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [editingListing, setEditingListing] = useState(null);
   const [listingsTab, setListingsTab] = useState('active');
   const [selectedBuyerId, setSelectedBuyerId] = useState(null);
   const [selectedSellerId, setSelectedSellerId] = useState(null);
   const [activeListingId, setActiveListingId] = useState(null);
+  const isFirstPageRender = useRef(true);
+
+  // Keep the URL in sync with the current page so reloads and shared links
+  // land on the right place. Skipped on the very first render -- the initial
+  // page was already derived from the URL above, so pushing again there
+  // would just add a redundant history entry pointing at the same place.
+  useEffect(() => {
+    if (isFirstPageRender.current) { isFirstPageRender.current = false; return; }
+    const path = slugify(page);
+    if (window.location.pathname !== path) {
+      window.history.pushState({ page }, '', path);
+    }
+  }, [page]);
+
+  // Let the browser back/forward buttons move between pages instead of doing
+  // nothing -- popstate fires after the browser has already updated
+  // location.pathname, so we just re-derive the page from it.
+  useEffect(() => {
+    const onPopState = () => setPage(pageFromPath(window.location.pathname));
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   const handleEditListing = (listing) => {
     setEditingListing(listing);
