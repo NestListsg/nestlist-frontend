@@ -556,6 +556,13 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     }
   };
 
+  // Video generation is asynchronous on the backend: the request returns
+  // immediately with {status: 'rendering'} and the render happens in a
+  // background worker. This function then polls the listing until its
+  // video_status becomes 'done' or 'failed'. That indirection exists because
+  // renders run 40-70s+, and Safari kills any single HTTP request around the
+  // 60s mark -- agents on Safari were getting an unexplained network error
+  // right as their video was about to finish.
   const handleGenerateVideo = async (listing) => {
     setVideoLoading(v => ({ ...v, [listing.id]: true }));
     setVideoError(e => ({ ...e, [listing.id]: '' }));
@@ -568,7 +575,38 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed to generate video');
-      setListings(prev => prev.map(l => l.id === listing.id ? { ...l, video_url: data.video_url, video_template_id: data.video_template_id } : l));
+
+      // Older backend responses returned the finished video directly.
+      if (data.video_url) {
+        setListings(prev => prev.map(l => l.id === listing.id ? { ...l, video_url: data.video_url, video_template_id: data.video_template_id } : l));
+        return;
+      }
+
+      // Poll every 5s, up to 5 minutes.
+      const POLL_MS = 5000;
+      const MAX_POLLS = 60;
+      for (let i = 0; i < MAX_POLLS; i++) {
+        await new Promise(r => setTimeout(r, POLL_MS));
+        let updated = null;
+        try {
+          const pollRes = await fetch(`${API}/api/listings?status=all`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const all = await pollRes.json();
+          updated = Array.isArray(all) ? all.find(l => l.id === listing.id) : null;
+        } catch {
+          continue; // transient poll failure -- keep waiting, the render is server-side
+        }
+        if (!updated) continue;
+        if (updated.video_status === 'done' && updated.video_url) {
+          setListings(prev => prev.map(l => l.id === listing.id ? { ...l, video_url: updated.video_url, video_template_id: updated.video_template_id, video_status: 'done' } : l));
+          return;
+        }
+        if (updated.video_status === 'failed') {
+          throw new Error(updated.video_error || 'Video generation failed. Please try again.');
+        }
+      }
+      throw new Error("This video is taking longer than expected. It may still finish -- check back in a few minutes before retrying.");
     } catch (err) {
       setVideoError(e => ({ ...e, [listing.id]: err.message }));
     } finally {
