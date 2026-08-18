@@ -74,6 +74,21 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   // sg_citizen defaults to true - GCB/landed purchases are Singapore Citizens only
 
+  // Backend's upload-images route accepts an upload_session id matching
+  // [A-Za-z0-9_-]{1,64}. crypto.randomUUID() satisfies that directly (36 hex
+  // chars + hyphens), with a manual fallback for older browsers that lack it.
+  const genUploadSession = () => {
+    try {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+      }
+    } catch {}
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let out = '';
+    for (let i = 0; i < 32; i++) out += chars[Math.floor(Math.random() * chars.length)];
+    return out;
+  };
+
   const clearForm = () => {
     setForm(DEFAULT_FORM);
     localStorage.removeItem(STORAGE_KEY);
@@ -222,6 +237,8 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       const imageResults = (await Promise.all(imageFiles.map(downscaleOrRead))).filter(Boolean);
 
       let pdfExtractedImages = [];
+      let pdfSkippedGraphics = 0;
+      let pdfSkippedDuplicates = 0;
       if (pdfFiles.length > 0) {
         setPhotoLoadingLabel(pdfFiles.length > 1 ? 'Extracting photos from PDFs...' : 'Extracting photos from PDF...');
         const pdfReads = await Promise.all(pdfFiles.map(readFile));
@@ -233,9 +250,11 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.detail || 'Failed to extract photos from PDF');
-          return data.images;
+          return data;
         }));
-        pdfExtractedImages = perPdfResults.flat();
+        pdfExtractedImages = perPdfResults.flatMap(r => r.images || []);
+        pdfSkippedGraphics = perPdfResults.reduce((sum, r) => sum + (r.skipped_graphics || 0), 0);
+        pdfSkippedDuplicates = perPdfResults.reduce((sum, r) => sum + (r.skipped_duplicates || 0), 0);
         setPhotoLoadingLabel('Uploading photos...');
       }
 
@@ -244,26 +263,49 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
 
       // Upload in small batches, sequentially, instead of one request carrying
       // every photo -- a single request with 15 photos can still brush the
-      // proxy's ~10MB body ceiling even after downscaling. The first batch
-      // replaces the listing's photo set, subsequent batches append (backend's
-      // `append` flag), so the batches assemble into one ordered set.
+      // proxy's ~10MB body ceiling even after downscaling. Batches now stage
+      // under a shared upload_session and only the last (finalize: true) batch
+      // actually commits them to the listing -- so a batch that fails partway,
+      // or a retry, can no longer wipe or duplicate photos the way separate
+      // per-batch commits could. append stays false throughout: this whole
+      // selection becomes the listing's complete photo set once it commits,
+      // same end result as before.
       const BATCH_SIZE = 4;
-      let finalUrls = [];
+      const uploadSession = genUploadSession();
+      let finalData = null;
+      let batchIndex = 0;
       for (let start = 0; start < images.length; start += BATCH_SIZE) {
         const batch = images.slice(start, start + BATCH_SIZE);
+        const isLastBatch = start + BATCH_SIZE >= images.length;
         setPhotoLoadingLabel(`Uploading photos ${Math.min(start + batch.length, images.length)} of ${images.length}...`);
         const response = await fetch(`${API}/api/listings/${result.listing.id}/upload-images`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ images: batch, append: start > 0 })
+          body: JSON.stringify({
+            images: batch,
+            append: false,
+            upload_session: uploadSession,
+            batch_index: batchIndex,
+            finalize: isLastBatch
+          })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || 'Failed to upload photos');
-        finalUrls = data.image_urls;
+        finalData = data;
+        batchIndex++;
       }
-      setUploadedPhotoUrls(finalUrls);
+      // Report what the server actually committed, not how many files the
+      // agent picked -- a capped session lands fewer photos than were selected.
+      const committedUrls = finalData?.image_urls || [];
+      setUploadedPhotoUrls(committedUrls);
+      const stagedCount = committedUrls.length;
       const pdfNote = pdfExtractedImages.length > 0 ? ` (${pdfExtractedImages.length} extracted from PDF)` : '';
-      setPhotoSuccess(`${images.length} photo${images.length > 1 ? 's' : ''} uploaded successfully!${pdfNote}`);
+      const cappedNote = finalData?.capped ? ' Some photos were skipped because listings are capped at 15 photos.' : '';
+      const skipNotes = [];
+      if (pdfSkippedGraphics > 0) skipNotes.push(`${pdfSkippedGraphics} brochure graphic${pdfSkippedGraphics > 1 ? 's were' : ' was'} filtered out`);
+      if (pdfSkippedDuplicates > 0) skipNotes.push(`${pdfSkippedDuplicates} duplicate photo${pdfSkippedDuplicates > 1 ? 's were' : ' was'} skipped`);
+      const skipNote = skipNotes.length ? ` (${skipNotes.join('; ')})` : '';
+      setPhotoSuccess(`${stagedCount} photo${stagedCount === 1 ? '' : 's'} uploaded successfully!${pdfNote}${skipNote}${cappedNote}`);
     } catch (err) {
       setPhotoError(`Failed to upload photos: ${err.message}`);
     } finally {

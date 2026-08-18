@@ -633,11 +633,29 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     }
   };
 
+  // Enhanced copies land under a filename that carries "enhanced_" as a marker
+  // (see backend main.py's _ENHANCED_MARKER) -- checking for it client-side
+  // lets the UI hide the Enhance button before ever asking the server, instead
+  // of always round-tripping to find out via a 409.
+  const isEnhancedUrl = (url) => {
+    if (!url) return false;
+    const path = url.split('?')[0];
+    const filename = path.substring(path.lastIndexOf('/') + 1);
+    return filename.includes('enhanced_');
+  };
+
   const handleDeletePhoto = async (listing, index) => {
     if (!window.confirm('Remove this photo from the listing?')) return;
+    // Sending the photo's own URL alongside the index means a stale tab (one
+    // whose copy of the images array has drifted -- a batch finished, or
+    // another tab already deleted/reordered something) can never delete the
+    // wrong photo: the backend matches on the URL and only falls back to the
+    // index as a hint.
+    const url = listing.images?.[index];
     setDeletingPhoto(d => ({ ...d, [`${listing.id}-${index}`]: true }));
     try {
-      const res = await fetch(`${API}/api/listings/${listing.id}/images/${index}`, {
+      const qs = url ? `?image_url=${encodeURIComponent(url)}` : '';
+      const res = await fetch(`${API}/api/listings/${listing.id}/images/${index}${qs}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -661,15 +679,28 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
 
   const handleEnhancePhoto = async (listing, index) => {
     const key = `${listing.id}-${index}`;
+    const url = listing.images?.[index];
     setEnhancingPhoto(e => ({ ...e, [key]: true }));
-    setEnhancePhotoError(e => ({ ...e, [key]: '' }));
+    setEnhancePhotoError(e => ({ ...e, [key]: null }));
     try {
-      const res = await fetch(`${API}/api/listings/${listing.id}/images/${index}/enhance`, {
+      // image_url alongside the index protects against a stale tab enhancing
+      // the wrong photo, same reasoning as the delete call above.
+      const qs = url ? `?image_url=${encodeURIComponent(url)}` : '';
+      const res = await fetch(`${API}/api/listings/${listing.id}/images/${index}/enhance${qs}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Failed to enhance photo');
+      if (!res.ok) {
+        // 409 here isn't a failure -- the backend uses it for "already
+        // enhanced" and "an enhance is already in flight for this photo"
+        // (e.g. a double-click, or another tab). Its detail text is already
+        // written to be read directly, so surface it gently rather than as
+        // a scary red error.
+        const err = new Error(data.detail || 'Failed to enhance photo');
+        err.gentle = res.status === 409;
+        throw err;
+      }
       setListings(prev => prev.map(l => {
         if (l.id !== listing.id) return l;
         const images = [...l.images];
@@ -677,7 +708,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         return { ...l, images };
       }));
     } catch (err) {
-      setEnhancePhotoError(e => ({ ...e, [key]: err.message }));
+      setEnhancePhotoError(e => ({ ...e, [key]: { message: err.message, gentle: !!err.gentle } }));
     } finally {
       setEnhancingPhoto(e => ({ ...e, [key]: false }));
     }
@@ -916,30 +947,48 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                           >
                             ⬇ Save
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => handleEnhancePhoto(l, i)}
-                            disabled={enhancingPhoto[`${l.id}-${i}`]}
-                            title="Auto-enhance this photo (free, replaces it in place)"
-                            style={{
-                              position: 'absolute', bottom: '4px', left: '4px',
-                              background: 'rgba(0,0,0,0.6)', color: '#F0C84A',
-                              border: 'none', borderRadius: '3px', fontSize: '10px', padding: '2px 6px',
-                              cursor: enhancingPhoto[`${l.id}-${i}`] ? 'not-allowed' : 'pointer',
-                              opacity: enhancingPhoto[`${l.id}-${i}`] ? 0.6 : 1
-                            }}
-                          >
-                            {enhancingPhoto[`${l.id}-${i}`] ? '✨...' : '✨ Enhance'}
-                          </button>
+                          {isEnhancedUrl(url) ? (
+                            <div
+                              title="This photo has already been enhanced"
+                              style={{
+                                position: 'absolute', bottom: '4px', left: '4px',
+                                background: 'rgba(0,0,0,0.6)', color: 'rgba(240,200,74,0.75)',
+                                borderRadius: '3px', fontSize: '10px', padding: '2px 6px'
+                              }}
+                            >
+                              ✓ Enhanced
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleEnhancePhoto(l, i)}
+                              disabled={enhancingPhoto[`${l.id}-${i}`]}
+                              title="Auto-enhance this photo (free, replaces it in place)"
+                              style={{
+                                position: 'absolute', bottom: '4px', left: '4px',
+                                background: 'rgba(0,0,0,0.6)', color: '#F0C84A',
+                                border: 'none', borderRadius: '3px', fontSize: '10px', padding: '2px 6px',
+                                cursor: enhancingPhoto[`${l.id}-${i}`] ? 'not-allowed' : 'pointer',
+                                opacity: enhancingPhoto[`${l.id}-${i}`] ? 0.6 : 1
+                              }}
+                            >
+                              {enhancingPhoto[`${l.id}-${i}`] ? '✨...' : '✨ Enhance'}
+                            </button>
+                          )}
                         </div>
                       );
                     })}
                   </div>
-                  {Object.entries(enhancePhotoError).some(([k, v]) => k.startsWith(`${l.id}-`) && v) && (
-                    <div style={{ color: '#e08080', fontSize: '12px', marginBottom: '10px' }}>
-                      {Object.entries(enhancePhotoError).find(([k, v]) => k.startsWith(`${l.id}-`) && v)?.[1]}
-                    </div>
-                  )}
+                  {Object.entries(enhancePhotoError).some(([k, v]) => k.startsWith(`${l.id}-`) && v) && (() => {
+                    const found = Object.entries(enhancePhotoError).find(([k, v]) => k.startsWith(`${l.id}-`) && v);
+                    const err = found ? found[1] : null;
+                    if (!err) return null;
+                    return (
+                      <div style={{ color: err.gentle ? '#F0C84A' : '#e08080', fontSize: '12px', marginBottom: '10px' }}>
+                        {err.message}
+                      </div>
+                    );
+                  })()}
                   <button
                     onClick={() => handleDownloadAll(l)}
                     disabled={downloading[l.id]}
