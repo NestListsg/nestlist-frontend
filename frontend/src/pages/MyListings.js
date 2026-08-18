@@ -300,6 +300,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const [videoError, setVideoError] = useState({});
   const [posterError, setPosterError] = useState({});
   const [posterPhotoIndex, setPosterPhotoIndex] = useState({});
+  const [photoLoadError, setPhotoLoadError] = useState({});
   const [deletingPhoto, setDeletingPhoto] = useState({});
   const [enhancingPhoto, setEnhancingPhoto] = useState({});
   const [enhancePhotoError, setEnhancePhotoError] = useState({});
@@ -376,6 +377,19 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
 
   const selectedVideoTemplateFor = (listing) =>
     videoTemplateChoice[listing.id] || listing.video_template_id || 'classic';
+
+  // A stored featured-photo index can go stale (e.g. a photo was deleted
+  // elsewhere, or the backend index predates a photo removal) and point past
+  // the end of the current images array, or at a photo whose URL 404s. Never
+  // trust it blindly -- fall back to photo 0 so we never show an empty
+  // FEATURED tile or send an out-of-range photo_index to the backend.
+  const getFeaturedIndex = (listing) => {
+    const raw = posterPhotoIndex[listing.id] || 0;
+    const images = listing.images || [];
+    const inRange = raw >= 0 && raw < images.length;
+    const broken = photoLoadError[`${listing.id}-${raw}`];
+    return inRange && !broken ? raw : 0;
+  };
 
   const handleCopy = (listingId, platform, text) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -545,7 +559,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     setPosterLoading(p => ({ ...p, [listing.id]: true }));
     setPosterError(e => ({ ...e, [listing.id]: '' }));
     try {
-      const photoIndex = posterPhotoIndex[listing.id] || 0;
+      const photoIndex = getFeaturedIndex(listing);
       const templateId = selectedTemplateFor(listing);
       const res = await fetch(`${API}/api/listings/${listing.id}/generate-poster?photo_index=${photoIndex}&template_id=${templateId}`, {
         method: 'POST',
@@ -573,7 +587,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     setVideoError(e => ({ ...e, [listing.id]: '' }));
     try {
       const videoTemplateId = selectedVideoTemplateFor(listing);
-      const photoIndex = posterPhotoIndex[listing.id] || 0;
+      const photoIndex = getFeaturedIndex(listing);
       const res = await fetch(`${API}/api/listings/${listing.id}/generate-video?video_template_id=${videoTemplateId}&photo_index=${photoIndex}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
@@ -631,6 +645,13 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       if (!res.ok) throw new Error(data.detail || 'Failed to delete photo');
       setListings(prev => prev.map(l => l.id === listing.id ? { ...l, images: data.images } : l));
       setPosterPhotoIndex(p => ({ ...p, [listing.id]: 0 }));
+      // Indices shift after a delete, so any remembered load-error keys for
+      // this listing no longer point at the right photo -- drop them.
+      setPhotoLoadError(e => {
+        const next = { ...e };
+        Object.keys(next).forEach(k => { if (k.startsWith(`${listing.id}-`)) delete next[k]; });
+        return next;
+      });
     } catch (err) {
       alert('Failed to delete photo.');
     } finally {
@@ -844,13 +865,14 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                 <div style={{ padding: '16px 20px 0' }}>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
                     {l.images.map((url, i) => {
-                      const isPosterPhoto = (posterPhotoIndex[l.id] || 0) === i;
+                      const isPosterPhoto = getFeaturedIndex(l) === i;
                       return (
                         <div key={i} style={{ position: 'relative' }}>
                           <img
                             src={url}
                             alt={`Property ${i + 1}`}
                             onClick={() => setPosterPhotoIndex(p => ({ ...p, [l.id]: i }))}
+                            onError={() => setPhotoLoadError(e => ({ ...e, [`${l.id}-${i}`]: true }))}
                             style={{
                               width: '150px', height: '110px', objectFit: 'cover', borderRadius: '4px',
                               border: isPosterPhoto ? '2px solid #F0C84A' : '1px solid rgba(212,175,55,0.3)',
