@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { formatPriceM } from '../utils/format';
+import { formatPriceM, sanitizeLocation, maskPrice } from '../utils/format';
 import MatchingBuyers from '../components/MatchingBuyers';
 
 const API = process.env.REACT_APP_API_URL || '';
@@ -66,7 +66,7 @@ function buildLinkedInInsightCaption(listing, agent, marketPulse) {
 
   const propertyContext = [
     listing.property_type ? listing.property_type.toLowerCase() : 'property',
-    listing.location ? `in ${listing.location}` : '',
+    listing.location ? `in ${sanitizeLocation(listing.location)}` : '',
   ].filter(Boolean).join(' ');
 
   const signOff = [agent?.name, agent?.contact, agent?.agency].filter(Boolean).join('\n');
@@ -82,6 +82,15 @@ ${signOff}`;
 
 function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) {
   if (platform === 'linkedin') return buildLinkedInInsightCaption(listing, agent, marketPulse);
+
+  // House/unit numbers never appear in generated copy shown to buyers, on
+  // any platform -- see displayLocation below. Exact price is a different
+  // rule per platform: PropertyGuru is an actual portal listing field (not
+  // a caption) and keeps the real price, while the FB/IG/WhatsApp/TikTok
+  // teaser captions below use maskedPrice (the "$X.XXM" convention) at most
+  // once each, per the caption copy rules.
+  const displayLocation = sanitizeLocation(listing.location);
+  const maskedPrice = maskPrice(listing.price);
 
   const listingUrl = `nestlist.sg/l/${listing.id}`;
   const cleanContent = (listing.content || '')
@@ -111,7 +120,7 @@ function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) 
   // whatever text that style produced to the selected character limit.
   if (platform === 'propertyguru') {
     const limit = pgLimit || PROPERTYGURU_CHAR_LIMIT;
-    const header = `${listing.property_type} | ${listing.location} | SGD ${formatPriceM(listing.price)}\n\n`;
+    const header = `${listing.property_type} | ${displayLocation} | SGD ${formatPriceM(listing.price)}\n\n`;
     let source;
     if (style === 'tldr') source = bullets;
     else if (style === 'combined') source = `KEY FACTS\n${bullets}\n\nTHE FULL STORY\n${cleanContent}`;
@@ -120,8 +129,8 @@ function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) 
   }
 
   const tldr = {
-    facebook: `🏡 ${listing.property_type} | ${listing.location}
-💰 SGD ${formatPriceM(listing.price)}
+    facebook: `🏡 ${listing.property_type} | ${displayLocation}
+💰 ${maskedPrice}
 
 ${bullets}
 
@@ -130,8 +139,8 @@ Interested? Visit ${listingUrl} or drop us a message.
 #NestList #NestListPrestige #SingaporeProperty #GCB #LandedProperty #PropertySG #RealEstate #Singapore #LuxuryProperty`,
 
     instagram: `🏡 ${listing.property_type}
-📍 ${listing.location}
-💰 SGD ${formatPriceM(listing.price)}
+📍 ${displayLocation}
+💰 ${maskedPrice}
 
 ${bullets}
 
@@ -142,8 +151,8 @@ DM me or visit ${listingUrl} 🏡
     whatsapp: `Hi! Quick summary of a new listing:
 
 *${listing.property_type}*
-📍 ${listing.location}
-💰 SGD ${formatPriceM(listing.price)}
+📍 ${displayLocation}
+💰 ${maskedPrice}
 
 ${bullets}
 
@@ -152,8 +161,8 @@ Reply to arrange a private viewing or visit ${listingUrl}. Thank you! 🙏`
 
   const long = {
     facebook: `🏡 NEW LISTING | ${listing.property_type}
-📍 ${listing.location}
-💰 SGD ${formatPriceM(listing.price)}
+📍 ${displayLocation}
+💰 ${maskedPrice}
 
 ${body}...
 
@@ -163,8 +172,8 @@ Interested? Visit ${listingUrl} or drop us a message.
 
     instagram: `✨ ${listing.property_type} for sale ✨
 
-📍 ${listing.location}
-💰 SGD ${formatPriceM(listing.price)}
+📍 ${displayLocation}
+💰 ${maskedPrice}
 
 ${shortBody}...
 
@@ -175,8 +184,8 @@ DM me or visit ${listingUrl} to find out more 🏡
     whatsapp: `Hi! I have a new property listing that may interest you.
 
 *${listing.property_type}*
-📍 ${listing.location}
-💰 SGD ${formatPriceM(listing.price)}
+📍 ${displayLocation}
+💰 ${maskedPrice}
 
 ${listing.content?.slice(0, 400) || ''}...
 
@@ -187,8 +196,8 @@ Thank you! 🙏`
 
   const combined = {
     facebook: `🏡 NEW LISTING | ${listing.property_type}
-📍 ${listing.location}
-💰 SGD ${formatPriceM(listing.price)}
+📍 ${displayLocation}
+💰 ${maskedPrice}
 
 ⚡ AT A GLANCE
 ${bullets}
@@ -201,8 +210,8 @@ Interested? Visit ${listingUrl} or drop us a message.
 #NestList #NestListPrestige #SingaporeProperty #GCB #LandedProperty #PropertySG #RealEstate #Singapore #LuxuryProperty #HomeSweetHome`,
 
     instagram: `🏡 ${listing.property_type}
-📍 ${listing.location}
-💰 SGD ${formatPriceM(listing.price)}
+📍 ${displayLocation}
+💰 ${maskedPrice}
 
 ⚡ AT A GLANCE
 ${bullets}
@@ -217,8 +226,8 @@ DM me or visit ${listingUrl} 🏡
     whatsapp: `Hi! I have a new property listing that may interest you.
 
 *${listing.property_type}*
-📍 ${listing.location}
-💰 SGD ${formatPriceM(listing.price)}
+📍 ${displayLocation}
+💰 ${maskedPrice}
 
 ⚡ AT A GLANCE
 ${bullets}
@@ -230,8 +239,8 @@ Reply to arrange a private viewing or visit ${listingUrl}. Thank you! 🙏`
   };
 
   const tiktok = {
-    tiktok: `${listing.property_type} in ${listing.location} 🏡
-SGD ${formatPriceM(listing.price)}
+    tiktok: `${listing.property_type} in ${displayLocation} 🏡
+${maskedPrice}
 ${listing.land_size ? listing.land_size.toLocaleString() + ' sqft' : ''} | ${listing.bedrooms ? listing.bedrooms + ' Bedrooms' : ''}
 Upload your property video and use this caption 👆
 DM to arrange viewing 🔑
@@ -542,7 +551,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     }
     try {
       await navigator.share({
-        title: `${listing.property_type} | ${listing.location}`,
+        title: `${listing.property_type} | ${sanitizeLocation(listing.location)}`,
         text: caption,
         url: `https://nestlist.sg/l/${listing.id}`
       });
