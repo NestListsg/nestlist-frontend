@@ -1199,11 +1199,24 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
 
                   {l.video_url && (
                     <div style={{ marginBottom: '10px' }}>
-                      <video
-                        src={l.video_url}
-                        controls
-                        style={{ maxWidth: '220px', borderRadius: '4px', border: '1px solid rgba(212,175,55,0.3)', display: 'block' }}
-                      />
+                      <div
+                        style={{
+                          width: '100%',
+                          maxWidth: '320px',
+                          aspectRatio: '9 / 16',
+                          margin: '0 auto',
+                          borderRadius: '4px',
+                          border: '1px solid rgba(212,175,55,0.3)',
+                          overflow: 'hidden',
+                          background: '#000'
+                        }}
+                      >
+                        <video
+                          src={l.video_url}
+                          controls
+                          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                        />
+                      </div>
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
