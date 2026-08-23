@@ -1214,6 +1214,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                         <video
                           src={l.video_url}
                           controls
+                          poster={l.images?.[getFeaturedIndex(l)]}
                           style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
                         />
                       </div>
