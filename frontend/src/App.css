@@ -363,6 +363,13 @@ body { font-family: 'Montserrat', sans-serif; background: var(--green-main); col
     resize: vertical; min-height: 80px; outline: none;
 }
 .form-textarea:focus { border-color: var(--gold); }
+.form-textarea::selection { background: rgba(240,200,74,0.5); color: var(--green-dark); }
+/* â€” SELECTIVE REWRITE FLASH â€” */
+.rewrite-flash { animation: rewriteFlash 1.4s ease; }
+@keyframes rewriteFlash {
+    0% { box-shadow: 0 0 0 3px rgba(240,200,74,0.6); border-color: var(--gold); }
+    100% { box-shadow: 0 0 0 3px rgba(240,200,74,0); border-color: rgba(212,175,55,0.3); }
+}
 /* â€” COMPLIANCE â€” */
 .compliance-item {
     padding: 10px 14px; border-radius: 3px;

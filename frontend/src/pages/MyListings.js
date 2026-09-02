@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { formatPriceM, sanitizeLocation, maskPrice } from '../utils/format';
 import MatchingBuyers from '../components/MatchingBuyers';
 
@@ -318,6 +318,19 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const [contentSaving, setContentSaving] = useState({});
   const [contentSaveError, setContentSaveError] = useState({});
   const [contentSaveSuccess, setContentSaveSuccess] = useState({});
+  // Selective rewrite ("select text -> rewrite just this part") -- state keyed
+  // by listing id, same convention as the rest of this file. rewriteSelection
+  // holds the captured {start, end, text, x, y} for the current text selection
+  // inside the write-up textarea; x/y position the floating button/box (fixed
+  // positioning, from the mouseup/keyup event -- see handleWriteUpSelect).
+  const [rewriteSelection, setRewriteSelection] = useState({});
+  const [rewriteBoxOpen, setRewriteBoxOpen] = useState({});
+  const [rewriteInstruction, setRewriteInstruction] = useState({});
+  const [rewriteLoading, setRewriteLoading] = useState({});
+  const [rewriteError, setRewriteError] = useState({});
+  const [rewriteUndo, setRewriteUndo] = useState({}); // previous full write-up text, for single-level undo
+  const [rewriteFlash, setRewriteFlash] = useState({}); // brief highlight pulse after a successful rewrite
+  const writeUpRefs = useRef({}); // listing id -> textarea DOM node, so we can reselect the rewritten span
   const [igCaption, setIgCaption] = useState({});
   const [igPosting, setIgPosting] = useState({});
   const [igPostError, setIgPostError] = useState({});
@@ -723,16 +736,30 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     }
   };
 
+  // Clears all selective-rewrite UI state for a listing -- called whenever an
+  // edit session starts or ends so a stale selection/undo from a previous
+  // pass never leaks into the next one.
+  const resetRewriteState = (listingId) => {
+    setRewriteSelection(s => ({ ...s, [listingId]: null }));
+    setRewriteBoxOpen(b => ({ ...b, [listingId]: false }));
+    setRewriteInstruction(i => ({ ...i, [listingId]: '' }));
+    setRewriteError(e => ({ ...e, [listingId]: '' }));
+    setRewriteUndo(u => ({ ...u, [listingId]: undefined }));
+    setRewriteFlash(f => ({ ...f, [listingId]: false }));
+  };
+
   const startEditContent = (listing) => {
     setEditedContent(c => ({ ...c, [listing.id]: listing.content || '' }));
     setContentSaveError(e => ({ ...e, [listing.id]: '' }));
     setContentSaveSuccess(s => ({ ...s, [listing.id]: '' }));
     setEditingContent(c => ({ ...c, [listing.id]: true }));
+    resetRewriteState(listing.id);
   };
 
   const cancelEditContent = (listingId) => {
     setEditingContent(c => ({ ...c, [listingId]: false }));
     setContentSaveError(e => ({ ...e, [listingId]: '' }));
+    resetRewriteState(listingId);
   };
 
   const saveEditContent = async (listing) => {
@@ -749,12 +776,117 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       setListings(prev => prev.map(l => l.id === listing.id ? { ...l, content: data.content } : l));
       setEditingContent(c => ({ ...c, [listing.id]: false }));
       setContentSaveSuccess(s => ({ ...s, [listing.id]: 'Write-up updated!' }));
+      resetRewriteState(listing.id);
       setTimeout(() => setContentSaveSuccess(s => ({ ...s, [listing.id]: '' })), 3000);
     } catch (err) {
       setContentSaveError(e => ({ ...e, [listing.id]: err.message }));
     } finally {
       setContentSaving(s => ({ ...s, [listing.id]: false }));
     }
+  };
+
+  // Fires on mouseup/keyup inside the write-up textarea while editing. If the
+  // agent has an actual (non-collapsed) selection, capture its start/end/text
+  // plus a screen position so the floating "Rewrite this part" button can be
+  // anchored near it. Plain <textarea> gives no caret-pixel API, so the
+  // position is best-effort: the mouseup pointer position when the selection
+  // was made by dragging, or the textarea's top-right corner for keyboard
+  // selections (shift+arrows, ctrl+A, double-click-via-keyboard, etc).
+  const handleWriteUpSelect = (listing, e) => {
+    const ta = e.target;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    if (end > start) {
+      const rect = ta.getBoundingClientRect();
+      const usePointer = e.type === 'mouseup' && typeof e.clientX === 'number';
+      const x = usePointer ? Math.min(e.clientX, rect.right - 12) : rect.right - 16;
+      const y = usePointer ? e.clientY - 14 : rect.top + 14;
+      setRewriteSelection(s => ({
+        ...s,
+        [listing.id]: { start, end, text: ta.value.slice(start, end), x, y }
+      }));
+    } else if (!rewriteBoxOpen[listing.id]) {
+      // Selection was cleared (click, arrow key, etc) -- hide the floating
+      // button, but only if the rewrite box itself isn't open, since typing
+      // an instruction shouldn't dismiss it.
+      setRewriteSelection(s => ({ ...s, [listing.id]: null }));
+    }
+  };
+
+  const openRewriteBox = (listingId) => {
+    setRewriteBoxOpen(b => ({ ...b, [listingId]: true }));
+    setRewriteError(e => ({ ...e, [listingId]: '' }));
+  };
+
+  const closeRewriteBox = (listingId) => {
+    setRewriteBoxOpen(b => ({ ...b, [listingId]: false }));
+    setRewriteSelection(s => ({ ...s, [listingId]: null }));
+    setRewriteInstruction(i => ({ ...i, [listingId]: '' }));
+    setRewriteError(e => ({ ...e, [listingId]: '' }));
+  };
+
+  const handleRewriteSelection = async (listing) => {
+    const info = rewriteSelection[listing.id];
+    if (!info) return;
+    const current = editedContent[listing.id] ?? '';
+    // Defensive client-side check -- if the agent kept typing elsewhere in
+    // the textarea after making the selection, the captured start/end no
+    // longer point at the same text. Catch it before spending a request.
+    if (current.slice(info.start, info.end) !== info.text) {
+      setRewriteError(e => ({ ...e, [listing.id]: "This part of the write-up has changed since you selected it -- please reselect and try again." }));
+      return;
+    }
+    setRewriteLoading(l => ({ ...l, [listing.id]: true }));
+    setRewriteError(e => ({ ...e, [listing.id]: '' }));
+    try {
+      const res = await fetch(`${API}/api/listings/${listing.id}/rewrite-selection`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ selected_text: info.text, instruction: rewriteInstruction[listing.id] || '' })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 409) {
+          throw new Error("This part of the write-up has changed since you selected it -- please reselect and try again.");
+        }
+        throw new Error(data.detail || 'Failed to rewrite that part -- please try again.');
+      }
+      const rewritten = data.rewritten_text ?? '';
+      const latest = editedContent[listing.id] ?? '';
+      if (latest.slice(info.start, info.end) !== info.text) {
+        throw new Error("This part of the write-up has changed since you selected it -- please reselect and try again.");
+      }
+      const updated = latest.slice(0, info.start) + rewritten + latest.slice(info.end);
+      setRewriteUndo(u => ({ ...u, [listing.id]: latest }));
+      setEditedContent(c => ({ ...c, [listing.id]: updated }));
+      setRewriteFlash(f => ({ ...f, [listing.id]: true }));
+      setTimeout(() => setRewriteFlash(f => ({ ...f, [listing.id]: false })), 1400);
+      closeRewriteBox(listing.id);
+      // Select the newly-inserted span so the browser's own text-selection
+      // highlight shows the agent exactly what changed (a plain textarea has
+      // no way to background-highlight a substring otherwise).
+      requestAnimationFrame(() => {
+        const ta = writeUpRefs.current[listing.id];
+        if (ta) {
+          ta.focus();
+          ta.setSelectionRange(info.start, info.start + rewritten.length);
+        }
+      });
+    } catch (err) {
+      setRewriteError(e => ({ ...e, [listing.id]: err.message }));
+    } finally {
+      setRewriteLoading(l => ({ ...l, [listing.id]: false }));
+    }
+  };
+
+  const undoRewrite = (listingId) => {
+    setEditedContent(c => {
+      const prev = rewriteUndo[listingId];
+      if (prev === undefined) return c;
+      return { ...c, [listingId]: prev };
+    });
+    setRewriteUndo(u => ({ ...u, [listingId]: undefined }));
+    setRewriteFlash(f => ({ ...f, [listingId]: false }));
   };
 
   const handlePostInstagram = async (listing) => {
@@ -1022,13 +1154,80 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
               {editingContent[l.id] ? (
                 <div style={{ margin: '16px 20px 0' }}>
                   <textarea
-                    className="form-textarea"
+                    ref={ta => { writeUpRefs.current[l.id] = ta; }}
+                    className={`form-textarea${rewriteFlash[l.id] ? ' rewrite-flash' : ''}`}
                     rows={16}
                     value={editedContent[l.id] ?? ''}
                     onChange={e => setEditedContent(c => ({ ...c, [l.id]: e.target.value }))}
+                    onMouseUp={e => handleWriteUpSelect(l, e)}
+                    onKeyUp={e => handleWriteUpSelect(l, e)}
                   />
+                  {rewriteSelection[l.id] && !rewriteBoxOpen[l.id] && (
+                    <button
+                      type="button"
+                      onClick={() => openRewriteBox(l.id)}
+                      style={{
+                        position: 'fixed', left: rewriteSelection[l.id].x, top: rewriteSelection[l.id].y,
+                        transform: 'translate(-50%, -100%)',
+                        background: '#0D2B1D', border: '1px solid rgba(212,175,55,0.6)',
+                        color: '#F0C84A', padding: '6px 12px', borderRadius: '20px',
+                        fontSize: '12px', fontFamily: "'Montserrat', sans-serif", cursor: 'pointer',
+                        boxShadow: '0 4px 14px rgba(0,0,0,0.35)', zIndex: 500, whiteSpace: 'nowrap'
+                      }}
+                    >
+                      ✨ Rewrite this part
+                    </button>
+                  )}
+                  {rewriteBoxOpen[l.id] && rewriteSelection[l.id] && (
+                    <div
+                      style={{
+                        position: 'fixed', left: rewriteSelection[l.id].x, top: rewriteSelection[l.id].y,
+                        transform: 'translate(-50%, -100%)',
+                        background: '#0D2B1D', border: '1px solid rgba(212,175,55,0.5)',
+                        borderRadius: '6px', padding: '12px', zIndex: 500, width: '260px',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.45)'
+                      }}
+                    >
+                      <div style={{ fontSize: '11px', color: 'rgba(248,244,236,0.65)', marginBottom: '8px', letterSpacing: '0.03em' }}>
+                        ✨ Rewrite selected text
+                      </div>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Optional: tell Claude what's wrong, e.g. 'too flowery'"
+                        value={rewriteInstruction[l.id] ?? ''}
+                        onChange={e => setRewriteInstruction(i => ({ ...i, [l.id]: e.target.value }))}
+                        onKeyDown={e => {
+                          if (e.key === 'Escape') closeRewriteBox(l.id);
+                          if (e.key === 'Enter' && !rewriteLoading[l.id]) handleRewriteSelection(l);
+                        }}
+                        style={{ fontSize: '12px', padding: '8px 10px', marginBottom: '8px' }}
+                        disabled={rewriteLoading[l.id]}
+                        autoFocus
+                      />
+                      {rewriteError[l.id] && <div className="error-msg" style={{ fontSize: '11px', padding: '6px 8px', marginBottom: '8px' }}>{rewriteError[l.id]}</div>}
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          type="button" onClick={() => closeRewriteBox(l.id)} disabled={rewriteLoading[l.id]}
+                          style={{
+                            background: 'transparent', border: '1px solid rgba(212,175,55,0.4)',
+                            color: '#F0C84A', padding: '7px 12px', borderRadius: '3px',
+                            cursor: 'pointer', fontSize: '12px', fontFamily: "'Montserrat', sans-serif"
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button" className="btn-primary" onClick={() => handleRewriteSelection(l)} disabled={rewriteLoading[l.id]}
+                          style={{ flex: 1, padding: '7px 12px', fontSize: '12px', marginTop: 0 }}
+                        >
+                          {rewriteLoading[l.id] ? <><span className="spinner" style={{ width: '12px', height: '12px', marginRight: '6px' }} />Rewriting...</> : 'Rewrite'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {contentSaveError[l.id] && <div className="error-msg" style={{ marginTop: '8px' }}>{contentSaveError[l.id]}</div>}
-                  <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '10px', alignItems: 'center' }}>
                     <button
                       type="button" onClick={() => cancelEditContent(l.id)} disabled={contentSaving[l.id]}
                       style={{
@@ -1042,6 +1241,18 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                     <button className="btn-primary" type="button" onClick={() => saveEditContent(l)} disabled={contentSaving[l.id]} style={{ maxWidth: '160px' }}>
                       {contentSaving[l.id] ? <><span className="spinner" />Saving...</> : 'Save'}
                     </button>
+                    {rewriteUndo[l.id] !== undefined && (
+                      <button
+                        type="button" onClick={() => undoRewrite(l.id)}
+                        style={{
+                          background: 'transparent', border: '1px solid rgba(212,175,55,0.4)',
+                          color: '#F0C84A', padding: '8px 14px', borderRadius: '3px',
+                          cursor: 'pointer', fontSize: '12px', fontFamily: "'Montserrat', sans-serif"
+                        }}
+                      >
+                        ↺ Undo rewrite
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (
