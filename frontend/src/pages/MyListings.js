@@ -328,7 +328,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const [rewriteInstruction, setRewriteInstruction] = useState({});
   const [rewriteLoading, setRewriteLoading] = useState({});
   const [rewriteError, setRewriteError] = useState({});
-  const [rewriteUndo, setRewriteUndo] = useState({}); // previous full write-up text, for single-level undo
+  const [rewriteUndoStack, setRewriteUndoStack] = useState({}); // listingId -> string[] stack of prior full write-up snapshots, oldest first -- Undo pops the most recent one, so repeated Undo walks all the way back to the untouched original
   const [rewriteFlash, setRewriteFlash] = useState({}); // brief highlight pulse after a successful rewrite
   const writeUpRefs = useRef({}); // listing id -> textarea DOM node, so we can reselect the rewritten span
   const [igCaption, setIgCaption] = useState({});
@@ -744,7 +744,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     setRewriteBoxOpen(b => ({ ...b, [listingId]: false }));
     setRewriteInstruction(i => ({ ...i, [listingId]: '' }));
     setRewriteError(e => ({ ...e, [listingId]: '' }));
-    setRewriteUndo(u => ({ ...u, [listingId]: undefined }));
+    setRewriteUndoStack(u => ({ ...u, [listingId]: [] }));
     setRewriteFlash(f => ({ ...f, [listingId]: false }));
   };
 
@@ -877,7 +877,9 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       const core = rewritten.replace(/^\s+/, '').replace(/\s+$/, '');
       const finalText = lead + core + trail;
       const updated = latest.slice(0, info.start) + finalText + latest.slice(info.end);
-      setRewriteUndo(u => ({ ...u, [listing.id]: latest }));
+      // Push, don't overwrite -- repeated Undo should walk back through
+      // every rewrite in this edit session, not just the last one.
+      setRewriteUndoStack(u => ({ ...u, [listing.id]: [...(u[listing.id] || []), latest] }));
       setEditedContent(c => ({ ...c, [listing.id]: updated }));
       setRewriteFlash(f => ({ ...f, [listing.id]: true }));
       setTimeout(() => setRewriteFlash(f => ({ ...f, [listing.id]: false })), 1400);
@@ -900,17 +902,17 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   };
 
   const undoRewrite = (listingId) => {
-    // Read the snapshot up front. If there's nothing to restore, bail BEFORE
-    // hiding the button -- otherwise the button could vanish while the text
-    // stays put (the exact "undo does nothing" symptom).
-    const prev = rewriteUndo[listingId];
-    if (prev === undefined) return;
+    // Read the top of the stack up front. If it's empty, bail BEFORE hiding
+    // the button -- otherwise the button could vanish while the text stays
+    // put (the exact "undo does nothing" symptom). Compute the popped value
+    // and the shortened stack together so both state updates below always
+    // agree with each other.
+    const stack = rewriteUndoStack[listingId];
+    if (!stack || stack.length === 0) return;
+    const prev = stack[stack.length - 1];
+    const rest = stack.slice(0, -1);
     setEditedContent(c => ({ ...c, [listingId]: prev }));
-    setRewriteUndo(u => {
-      const next = { ...u };
-      delete next[listingId];
-      return next;
-    });
+    setRewriteUndoStack(u => ({ ...u, [listingId]: rest }));
     setRewriteFlash(f => ({ ...f, [listingId]: false }));
     // Make the reverted text visibly the source of truth in the textarea.
     requestAnimationFrame(() => {
@@ -1271,7 +1273,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                     <button className="btn-primary" type="button" onClick={() => saveEditContent(l)} disabled={contentSaving[l.id]} style={{ maxWidth: '160px' }}>
                       {contentSaving[l.id] ? <><span className="spinner" />Saving...</> : 'Save'}
                     </button>
-                    {rewriteUndo[l.id] !== undefined && (
+                    {rewriteUndoStack[l.id] && rewriteUndoStack[l.id].length > 0 && (
                       <button
                         type="button" onClick={() => undoRewrite(l.id)}
                         style={{
@@ -1280,7 +1282,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                           cursor: 'pointer', fontSize: '12px', fontFamily: "'Montserrat', sans-serif"
                         }}
                       >
-                        ↺ Undo rewrite
+                        ↺ Undo rewrite{rewriteUndoStack[l.id].length > 1 ? ` (${rewriteUndoStack[l.id].length})` : ''}
                       </button>
                     )}
                   </div>
