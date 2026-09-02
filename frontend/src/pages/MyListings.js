@@ -900,13 +900,23 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   };
 
   const undoRewrite = (listingId) => {
-    setEditedContent(c => {
-      const prev = rewriteUndo[listingId];
-      if (prev === undefined) return c;
-      return { ...c, [listingId]: prev };
+    // Read the snapshot up front. If there's nothing to restore, bail BEFORE
+    // hiding the button -- otherwise the button could vanish while the text
+    // stays put (the exact "undo does nothing" symptom).
+    const prev = rewriteUndo[listingId];
+    if (prev === undefined) return;
+    setEditedContent(c => ({ ...c, [listingId]: prev }));
+    setRewriteUndo(u => {
+      const next = { ...u };
+      delete next[listingId];
+      return next;
     });
-    setRewriteUndo(u => ({ ...u, [listingId]: undefined }));
     setRewriteFlash(f => ({ ...f, [listingId]: false }));
+    // Make the reverted text visibly the source of truth in the textarea.
+    requestAnimationFrame(() => {
+      const ta = writeUpRefs.current[listingId];
+      if (ta) { ta.focus(); ta.setSelectionRange(0, 0); }
+    });
   };
 
   const handlePostInstagram = async (listing) => {
