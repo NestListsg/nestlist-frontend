@@ -828,11 +828,13 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const handleRewriteSelection = async (listing) => {
     const info = rewriteSelection[listing.id];
     if (!info) return;
+    // Read the selection fresh from the editor's current state at click
+    // time -- never trust info.text on its own, since it was captured back
+    // when the selection was first made and can go stale (e.g. an earlier
+    // rewrite already replaced text at/around this position).
     const current = editedContent[listing.id] ?? '';
-    // Defensive client-side check -- if the agent kept typing elsewhere in
-    // the textarea after making the selection, the captured start/end no
-    // longer point at the same text. Catch it before spending a request.
-    if (current.slice(info.start, info.end) !== info.text) {
+    const selectedText = current.slice(info.start, info.end);
+    if (!selectedText || selectedText !== info.text) {
       setRewriteError(e => ({ ...e, [listing.id]: "This part of the write-up has changed since you selected it -- please reselect and try again." }));
       return;
     }
@@ -842,7 +844,11 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       const res = await fetch(`${API}/api/listings/${listing.id}/rewrite-selection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ selected_text: info.text, instruction: rewriteInstruction[listing.id] || '' })
+        // current_text is the editor's full unsaved content -- the backend
+        // validates the selection and builds rewrite context against this
+        // instead of the saved DB row, so a second rewrite (on top of an
+        // earlier unsaved one) doesn't 409 against stale saved text.
+        body: JSON.stringify({ selected_text: selectedText, current_text: current, instruction: rewriteInstruction[listing.id] || '' })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
