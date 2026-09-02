@@ -81,19 +81,19 @@ export default function ChatWidget({ token, activeListingId }) {
         title="Ask Mary"
         style={{
           position: 'fixed', bottom: '24px', right: '24px', zIndex: 1000,
-          width: '46px', height: '46px', borderRadius: '50%', padding: 0,
+          width: '40px', height: '40px', borderRadius: '50%', padding: 0,
           background: '#D4AF37', border: 'none', cursor: 'pointer',
           boxShadow: '0 6px 20px rgba(0,0,0,0.4)',
-          fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: '#14231b'
         }}
       >
-        {open ? '✕' : <MaryAvatar size={46} />}
+        {open ? '✕' : <MaryAvatar size={40} />}
       </button>
 
       {open && (
         <div style={{
-          position: 'fixed', bottom: '82px', right: '24px', zIndex: 1000,
+          position: 'fixed', bottom: '76px', right: '24px', zIndex: 1000,
           width: '360px', maxWidth: 'calc(100vw - 32px)', height: '480px', maxHeight: 'calc(100vh - 140px)',
           background: '#14231b', border: '1px solid rgba(212,175,55,0.4)', borderRadius: '8px',
           display: 'flex', flexDirection: 'column', overflow: 'hidden',

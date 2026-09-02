@@ -831,8 +831,10 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     // Read the selection fresh from the editor's current state at click
     // time -- never trust info.text on its own, since it was captured back
     // when the selection was first made and can go stale (e.g. an earlier
-    // rewrite already replaced text at/around this position).
-    const current = editedContent[listing.id] ?? '';
+    // rewrite already replaced text at/around this position). Falls back to
+    // listing.content (the real displayed text), not '', so a snapshot
+    // never gets taken from a blank string.
+    const current = editedContent[listing.id] ?? listing.content ?? '';
     const selectedText = current.slice(info.start, info.end);
     if (!selectedText || selectedText !== info.text) {
       setRewriteError(e => ({ ...e, [listing.id]: "This part of the write-up has changed since you selected it -- please reselect and try again." }));
@@ -858,11 +860,23 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         throw new Error(data.detail || 'Failed to rewrite that part -- please try again.');
       }
       const rewritten = data.rewritten_text ?? '';
-      const latest = editedContent[listing.id] ?? '';
+      // latest/current are the same closure-captured value (no state change
+      // happens between the two reads), kept as separate names for clarity.
+      // Same '' -> listing.content fallback as above, so the undo snapshot
+      // below is always the real pre-rewrite text.
+      const latest = editedContent[listing.id] ?? listing.content ?? '';
       if (latest.slice(info.start, info.end) !== info.text) {
         throw new Error("This part of the write-up has changed since you selected it -- please reselect and try again.");
       }
-      const updated = latest.slice(0, info.start) + rewritten + latest.slice(info.end);
+      // The backend trims whitespace off its reply, so splicing rewritten
+      // straight in would eat the paragraph break around the selection.
+      // Keep the original selection's leading/trailing whitespace and only
+      // swap in the trimmed core.
+      const lead = selectedText.match(/^\s*/)[0];
+      const trail = selectedText.match(/\s*$/)[0];
+      const core = rewritten.replace(/^\s+/, '').replace(/\s+$/, '');
+      const finalText = lead + core + trail;
+      const updated = latest.slice(0, info.start) + finalText + latest.slice(info.end);
       setRewriteUndo(u => ({ ...u, [listing.id]: latest }));
       setEditedContent(c => ({ ...c, [listing.id]: updated }));
       setRewriteFlash(f => ({ ...f, [listing.id]: true }));
@@ -875,7 +889,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         const ta = writeUpRefs.current[listing.id];
         if (ta) {
           ta.focus();
-          ta.setSelectionRange(info.start, info.start + rewritten.length);
+          ta.setSelectionRange(info.start, info.start + finalText.length);
         }
       });
     } catch (err) {
