@@ -81,18 +81,25 @@ export default function ChatWidget({ token, activeListingId }) {
         title="Ask Mary"
         style={{
           position: 'fixed', bottom: '24px', right: '24px', zIndex: 1000,
-          width: '40px', height: '40px', borderRadius: '50%', padding: 0,
+          // Sizes are decoupled by state -- Mary's avatar launcher (closed)
+          // stays at its original 56px; only the X close circle (open)
+          // shrinks to 40px. Do not merge these back into one constant.
+          width: open ? '40px' : '56px', height: open ? '40px' : '56px',
+          borderRadius: '50%', padding: 0,
           background: '#D4AF37', border: 'none', cursor: 'pointer',
           boxShadow: '0 6px 20px rgba(0,0,0,0.4)',
-          fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: open ? '16px' : '22px', display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: '#14231b'
         }}
       >
-        {open ? '✕' : <MaryAvatar size={40} />}
+        {open ? '✕' : <MaryAvatar size={56} />}
       </button>
 
       {open && (
         <div style={{
+          // Panel only ever shows in the open state, so its clearance is
+          // keyed to the open (40px) close button: 24 (bottom offset) + 40
+          // (button height) + 12 (gap) = 76.
           position: 'fixed', bottom: '76px', right: '24px', zIndex: 1000,
           width: '360px', maxWidth: 'calc(100vw - 32px)', height: '480px', maxHeight: 'calc(100vh - 140px)',
           background: '#14231b', border: '1px solid rgba(212,175,55,0.4)', borderRadius: '8px',
