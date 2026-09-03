@@ -1226,7 +1226,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       <input
                         type="text"
                         className="form-input"
-                        placeholder="Optional: tell Claude what's wrong, e.g. 'too flowery'"
+                        placeholder="Optional: tell NestList what's wrong, e.g. 'too flowery'"
                         value={rewriteInstruction[l.id] ?? ''}
                         onChange={e => setRewriteInstruction(i => ({ ...i, [l.id]: e.target.value }))}
                         onKeyDown={e => {
@@ -1237,6 +1237,9 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                         disabled={rewriteLoading[l.id]}
                         autoFocus
                       />
+                      <div style={{ fontSize: '10.5px', color: 'rgba(248,244,236,0.5)', fontStyle: 'italic', marginBottom: '8px', lineHeight: '1.4' }}>
+                        * To rewrite only part of the text, highlight that portion and NestList will rewrite just that.
+                      </div>
                       {rewriteError[l.id] && <div className="error-msg" style={{ fontSize: '11px', padding: '6px 8px', marginBottom: '8px' }}>{rewriteError[l.id]}</div>}
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <button
