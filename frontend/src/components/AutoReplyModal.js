@@ -68,7 +68,7 @@ export default function AutoReplyModal({ token, enquiry, onClose }) {
         onClick={e => e.stopPropagation()}
       >
         <div className="page-title" style={{ fontSize: '22px', marginBottom: '4px' }}>
-          Auto-Reply
+          ✨ Auto-Reply
         </div>
         <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '18px' }}>
           For {enquiry.client_name}
@@ -89,6 +89,12 @@ export default function AutoReplyModal({ token, enquiry, onClose }) {
 
         {!loading && !error && result && (
           <div>
+            <div style={{
+              fontSize: '11px', color: 'var(--gold-light)', letterSpacing: '0.03em',
+              marginBottom: '14px', fontStyle: 'italic'
+            }}>
+              Unlike a plain reply, this sends your listing's video, poster &amp; link.
+            </div>
             <div className="form-group">
               <label className="form-label">Message (editable)</label>
               <textarea
@@ -110,7 +116,7 @@ export default function AutoReplyModal({ token, enquiry, onClose }) {
                   {result.video_url && (
                     <a href={result.video_url} target="_blank" rel="noreferrer"
                       style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--cream)', fontSize: '13px', textDecoration: 'none' }}>
-                      Video tour
+                      🎬 Video tour
                     </a>
                   )}
                   {result.poster_url && (
@@ -127,7 +133,7 @@ export default function AutoReplyModal({ token, enquiry, onClose }) {
                   {result.listing_link && (
                     <a href={result.listing_link} target="_blank" rel="noreferrer"
                       style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--cream)', fontSize: '13px', textDecoration: 'none', wordBreak: 'break-all' }}>
-                      Listing page
+                      🔗 Listing page
                     </a>
                   )}
                 </div>
