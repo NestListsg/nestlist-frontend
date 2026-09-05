@@ -98,7 +98,42 @@ export default function AutoReplyModal({ token, enquiry, onClose }) {
                 onChange={e => setMessage(e.target.value)}
               />
             </div>
-            <div>hasAssets: {String(hasAssets)}, hasWhatsApp: {String(hasWhatsApp)}, copied: {String(copied)}</div>
+            {hasAssets && (
+              <div style={{
+                background: 'rgba(212,175,55,0.06)', border: '1px solid rgba(212,175,55,0.2)',
+                borderRadius: '4px', padding: '12px 14px', marginBottom: '16px'
+              }}>
+                <div style={{ fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(248,244,236,0.6)', marginBottom: '10px' }}>
+                  Included with your reply:
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {result.video_url && (
+                    <a href={result.video_url} target="_blank" rel="noreferrer"
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--cream)', fontSize: '13px', textDecoration: 'none' }}>
+                      Video tour
+                    </a>
+                  )}
+                  {result.poster_url && (
+                    <a href={result.poster_url} target="_blank" rel="noreferrer"
+                      style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--cream)', fontSize: '13px', textDecoration: 'none' }}>
+                      <img
+                        src={result.poster_url}
+                        alt="Listing poster"
+                        style={{ width: '44px', height: '44px', objectFit: 'cover', borderRadius: '3px', border: '1px solid rgba(212,175,55,0.3)' }}
+                      />
+                      Poster
+                    </a>
+                  )}
+                  {result.listing_link && (
+                    <a href={result.listing_link} target="_blank" rel="noreferrer"
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--cream)', fontSize: '13px', textDecoration: 'none', wordBreak: 'break-all' }}>
+                      Listing page
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+            <div>hasWhatsApp: {String(hasWhatsApp)}, copied: {String(copied)}</div>
             <button type="button" className="btn-gold" onClick={handleCopy}>Copy message</button>
             <button type="button" onClick={onClose}>Close</button>
           </div>
