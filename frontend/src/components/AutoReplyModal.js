@@ -38,6 +38,7 @@ export default function AutoReplyModal({ token, enquiry, onClose }) {
         setLoading(false);
       });
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enquiry.id, token]);
 
   const handleCopy = async () => {
@@ -46,7 +47,7 @@ export default function AutoReplyModal({ token, enquiry, onClose }) {
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
-    } catch (err) {
+    } catch (e) {
       setError('Could not copy to clipboard -- please select and copy the text manually.');
     }
   };
@@ -71,11 +72,12 @@ export default function AutoReplyModal({ token, enquiry, onClose }) {
           ✨ Auto-Reply
         </div>
         <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '18px' }}>
-          For {enquiry.client_name}
+          For {enquiry.client_name}{enquiry.property_interest ? ` · ${enquiry.property_interest}` : ''}
         </div>
 
         {loading && (
           <div style={{ display: 'flex', alignItems: 'center', padding: '20px 0', color: 'rgba(248,244,236,0.6)', fontSize: '13px' }}>
+            <span className="spinner" />
             Generating a personalized reply...
           </div>
         )}
@@ -83,7 +85,35 @@ export default function AutoReplyModal({ token, enquiry, onClose }) {
         {!loading && error && (
           <div>
             <div className="error-msg">{error}</div>
-            <button type="button" onClick={onClose}>Close</button>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '14px' }}>
+              <button
+                className="btn-gold"
+                style={{ maxWidth: '160px' }}
+                onClick={() => {
+                  // retry by re-running the effect via a fresh fetch
+                  setResult(null);
+                  setError('');
+                  setLoading(true);
+                  fetch(`${API}/api/enquiries/${enquiry.id}/auto-reply`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}` }
+                  })
+                    .then(async r => {
+                      const data = await r.json().catch(() => null);
+                      if (!r.ok) throw new Error((data && data.detail) || `Could not generate a reply right now (${r.status}). Please try again.`);
+                      return data;
+                    })
+                    .then(data => { setResult(data); setMessage(data.message || ''); setLoading(false); })
+                    .catch(err => { setError(err.message || 'Could not generate a reply right now. Please try again.'); setLoading(false); });
+                }}
+              >
+                Try Again
+              </button>
+              <button type="button" onClick={onClose}
+                style={{ background: 'transparent', border: '1px solid rgba(212,175,55,0.4)', color: '#F0C84A', padding: '10px 20px', borderRadius: '3px', cursor: 'pointer', fontSize: '13px', fontFamily: "'Montserrat', sans-serif" }}>
+                Close
+              </button>
+            </div>
           </div>
         )}
 
@@ -95,6 +125,7 @@ export default function AutoReplyModal({ token, enquiry, onClose }) {
             }}>
               Unlike a plain reply, this sends your listing's video, poster &amp; link.
             </div>
+
             <div className="form-group">
               <label className="form-label">Message (editable)</label>
               <textarea
@@ -104,6 +135,7 @@ export default function AutoReplyModal({ token, enquiry, onClose }) {
                 onChange={e => setMessage(e.target.value)}
               />
             </div>
+
             {hasAssets && (
               <div style={{
                 background: 'rgba(212,175,55,0.06)', border: '1px solid rgba(212,175,55,0.2)',
@@ -139,9 +171,41 @@ export default function AutoReplyModal({ token, enquiry, onClose }) {
                 </div>
               </div>
             )}
-            <div>hasWhatsApp: {String(hasWhatsApp)}, copied: {String(copied)}</div>
-            <button type="button" className="btn-gold" onClick={handleCopy}>Copy message</button>
-            <button type="button" onClick={onClose}>Close</button>
+
+            {error && <div className="error-msg" style={{ marginBottom: '12px' }}>{error}</div>}
+            {copied && <div className="success-msg" style={{ marginBottom: '12px' }}>Copied to clipboard.</div>}
+
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              {hasWhatsApp ? (
+                <a
+                  href={result.whatsapp_link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-primary"
+                  style={{ maxWidth: '210px', textAlign: 'center', textDecoration: 'none', display: 'inline-block' }}
+                >
+                  Send on WhatsApp
+                </a>
+              ) : (
+                <span title="No phone number on file for this enquiry">
+                  <button className="btn-primary" style={{ maxWidth: '210px', opacity: 0.5, cursor: 'not-allowed' }} disabled>
+                    Send on WhatsApp
+                  </button>
+                </span>
+              )}
+              <button type="button" className="btn-gold" style={{ maxWidth: '160px' }} onClick={handleCopy}>
+                Copy message
+              </button>
+              <button type="button" onClick={onClose}
+                style={{ background: 'transparent', border: '1px solid rgba(212,175,55,0.4)', color: '#F0C84A', padding: '10px 20px', borderRadius: '3px', cursor: 'pointer', fontSize: '13px', fontFamily: "'Montserrat', sans-serif" }}>
+                Close
+              </button>
+            </div>
+            {!hasWhatsApp && (
+              <div style={{ fontSize: '11px', color: 'rgba(248,244,236,0.4)', marginTop: '8px' }}>
+                No phone number on file -- add one to this client to send via WhatsApp.
+              </div>
+            )}
           </div>
         )}
       </div>

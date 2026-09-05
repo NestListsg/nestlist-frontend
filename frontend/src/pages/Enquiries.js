@@ -297,8 +297,15 @@ export default function Enquiries({ agent, token }) {
               )}
               <div style={{display:'flex', gap:'10px', marginTop:'12px', flexWrap:'wrap'}}>
                 <button className="btn-gold" style={{maxWidth:'120px'}} onClick={() => handleEdit(enq)}>Edit</button>
-                <button onClick={() => setAutoReplyFor(enq)} style={{background:'var(--gold)', border:'1px solid var(--gold)', color:'var(--green-dark)', padding:'8px 16px', borderRadius:'3px', cursor:'pointer', fontSize:'12px', fontFamily:"'Montserrat', sans-serif", fontWeight:600}}>
-                  Auto-Reply
+                <button
+                  onClick={() => setAutoReplyFor(enq)}
+                  style={{
+                    background: 'var(--gold)', border: '1px solid var(--gold)', color: 'var(--green-dark)',
+                    padding: '8px 16px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px',
+                    fontFamily: "'Montserrat', sans-serif", fontWeight: 600
+                  }}
+                >
+                  ✨ Auto-Reply
                 </button>
                 {(enq.client_type === 'Buyer' || enq.client_type === 'Both') && (
                   <button onClick={() => setConverting({ enquiry: enq, target: 'buyer' })}
