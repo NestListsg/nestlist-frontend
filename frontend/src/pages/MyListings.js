@@ -1420,7 +1420,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                     <div style={{ color: '#e08080', fontSize: '12px', marginTop: '8px' }}>{posterError[l.id]}</div>
                   )}
 
-                  {videoTemplates.length > 0 && (
+                  {videoTemplates.length > 0 && !l.signature_video_url && (
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '14px', marginBottom: '10px' }}>
                       {videoTemplates.map(t => {
                         const selected = selectedVideoTemplateFor(l) === t.id;
@@ -1452,7 +1452,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       {l.signature_video_url && (
                         <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', justifyContent: 'center' }}>
                           {[
-                            { key: 'classic', label: 'Classic' },
+                            { key: 'classic', label: 'Classic Video' },
                             { key: 'signature', label: 'Signature', premium: true }
                           ].map(t => {
                             const active = (videoTier[l.id] || 'signature') === t.key;
