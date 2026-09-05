@@ -54,12 +54,24 @@ export default function Enquiries({ agent, token }) {
   const [error, setError] = useState('');
   const [converting, setConverting] = useState(null); // { enquiry, target: 'buyer' | 'seller' }
   const [convertedMessage, setConvertedMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
     fetch(`${API}/api/enquiries`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json()).then(setEnquiries).catch(() => {});
+      .then(r => r.json().catch(() => null).then(data => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) {
+          setLoadError((data && data.detail) || 'Could not load client records.');
+          setEnquiries([]);
+        } else {
+          setEnquiries(Array.isArray(data) ? data : []);
+        }
+        setLoading(false);
+      })
+      .catch(() => { setLoadError('Could not load client records.'); setEnquiries([]); setLoading(false); });
   }, [token]);
 
   const handleSave = async () => {
@@ -201,7 +213,19 @@ export default function Enquiries({ agent, token }) {
         </div>
       )}
 
-      {enquiries.length === 0 && !showForm && (
+      {loading && !showForm && (
+        <div style={{color:'rgba(248,244,236,0.4)', fontStyle:'italic', fontSize:'13px'}}>
+          Loading client records...
+        </div>
+      )}
+
+      {!loading && loadError && !showForm && (
+        <div className="error-msg" style={{marginBottom:'16px'}}>
+          {loadError} Please refresh the page or try again shortly.
+        </div>
+      )}
+
+      {!loading && !loadError && enquiries.length === 0 && !showForm && (
         <div style={{color:'rgba(248,244,236,0.4)', fontStyle:'italic', fontSize:'13px'}}>
           No client records yet. Click Add New Client to begin.
         </div>
