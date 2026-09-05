@@ -307,6 +307,10 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const [posterLoading, setPosterLoading] = useState({});
   const [videoLoading, setVideoLoading] = useState({});
   const [videoError, setVideoError] = useState({});
+  // listingId -> 'classic' | 'signature'. Only meaningful for listings that have a
+  // signature_video_url (currently just the demo listing) -- default to 'signature'
+  // so the premium clip plays first. Everything else ignores this entirely.
+  const [videoTier, setVideoTier] = useState({});
   const [posterError, setPosterError] = useState({});
   const [posterPhotoIndex, setPosterPhotoIndex] = useState({});
   const [photoLoadError, setPhotoLoadError] = useState({});
@@ -1445,6 +1449,53 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
 
                   {l.video_url && (
                     <div style={{ marginBottom: '10px' }}>
+                      {l.signature_video_url && (
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', justifyContent: 'center' }}>
+                          {[
+                            { key: 'classic', label: 'Classic' },
+                            { key: 'signature', label: 'Signature', premium: true }
+                          ].map(t => {
+                            const active = (videoTier[l.id] || 'signature') === t.key;
+                            return (
+                              <button
+                                key={t.key}
+                                type="button"
+                                onClick={() => setVideoTier(v => ({ ...v, [l.id]: t.key }))}
+                                aria-pressed={active}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  background: active ? 'rgba(212,175,55,0.25)' : 'transparent',
+                                  border: `1px solid ${active ? '#D4AF37' : 'rgba(212,175,55,0.3)'}`,
+                                  color: active ? '#F0C84A' : 'rgba(248,244,236,0.6)',
+                                  padding: '6px 14px',
+                                  borderRadius: '3px',
+                                  cursor: 'pointer',
+                                  fontSize: '12px',
+                                  fontFamily: "'Montserrat', sans-serif",
+                                  transition: 'all 0.2s'
+                                }}
+                              >
+                                {active ? '✓ ' : ''}{t.label}
+                                {t.premium && (
+                                  <span style={{
+                                    fontSize: '9px',
+                                    letterSpacing: '0.05em',
+                                    color: '#0F2A22',
+                                    background: '#D4AF37',
+                                    borderRadius: '2px',
+                                    padding: '2px 5px',
+                                    fontWeight: 700
+                                  }}>
+                                    ★ PREMIUM
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                       <div
                         style={{
                           width: '100%',
@@ -1458,7 +1509,12 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                         }}
                       >
                         <video
-                          src={l.video_url}
+                          key={l.signature_video_url ? `${l.id}-${videoTier[l.id] || 'signature'}` : l.id}
+                          src={
+                            l.signature_video_url && (videoTier[l.id] || 'signature') === 'signature'
+                              ? l.signature_video_url
+                              : l.video_url
+                          }
                           controls
                           poster={l.images?.[getFeaturedIndex(l)]}
                           style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
