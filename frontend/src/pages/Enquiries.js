@@ -64,14 +64,14 @@ export default function Enquiries({ agent, token }) {
       .then(r => r.json().catch(() => null).then(data => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
         if (!ok) {
-          setLoadError((data && data.detail) || 'Could not load client records.');
+          setLoadError((data && data.detail) || 'Could not load client records. Please refresh the page or try again shortly.');
           setEnquiries([]);
         } else {
           setEnquiries(Array.isArray(data) ? data : []);
         }
         setLoading(false);
       })
-      .catch(() => { setLoadError('Could not load client records.'); setEnquiries([]); setLoading(false); });
+      .catch(() => { setLoadError('Could not load client records. Please refresh the page or try again shortly.'); setEnquiries([]); setLoading(false); });
   }, [token]);
 
   const handleSave = async () => {
@@ -221,7 +221,7 @@ export default function Enquiries({ agent, token }) {
 
       {!loading && loadError && !showForm && (
         <div className="error-msg" style={{marginBottom:'16px'}}>
-          {loadError} Please refresh the page or try again shortly.
+          {loadError}
         </div>
       )}
 
