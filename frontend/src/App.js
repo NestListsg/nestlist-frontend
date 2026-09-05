@@ -40,7 +40,7 @@ const pageFromPath = (pathname) => {
 
 function Sidebar({ page, setPage, agent, onLogout, isOpen, onClose, listingsTab, setListingsTab }) {
   const navItems = NAV_ITEMS;
-  const initials = agent?.name?.split(' ').slice(0,2).map(n => n[0]).join('').toUpperCase() || 'NL';
+  const initials = agent?.name?.split(' ').filter(w => w && /[a-zA-Z]/.test(w[0])).slice(0,2).map(n => n[0]).join('').toUpperCase() || 'NL';
 
   const handleNavClick = (item) => {
     setPage(item);
@@ -102,7 +102,7 @@ function Sidebar({ page, setPage, agent, onLogout, isOpen, onClose, listingsTab,
 }
 
 function Header({ agent }) {
-  const initials = agent?.name?.split(' ').slice(0,2).map(n => n[0]).join('').toUpperCase() || 'NL';
+  const initials = agent?.name?.split(' ').filter(w => w && /[a-zA-Z]/.test(w[0])).slice(0,2).map(n => n[0]).join('').toUpperCase() || 'NL';
   return (
     <>
       <div className="nl-header">
