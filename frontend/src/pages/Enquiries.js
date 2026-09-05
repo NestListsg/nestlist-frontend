@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { formatPriceM, fullNumberToMillions } from '../utils/format';
 import BuyerFormModal from '../components/BuyerFormModal';
 import SellerFormModal from '../components/SellerFormModal';
+import AutoReplyModal from '../components/AutoReplyModal';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -53,6 +54,7 @@ export default function Enquiries({ agent, token }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [converting, setConverting] = useState(null); // { enquiry, target: 'buyer' | 'seller' }
+  const [autoReplyFor, setAutoReplyFor] = useState(null); // enquiry object
   const [convertedMessage, setConvertedMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -295,6 +297,16 @@ export default function Enquiries({ agent, token }) {
               )}
               <div style={{display:'flex', gap:'10px', marginTop:'12px', flexWrap:'wrap'}}>
                 <button className="btn-gold" style={{maxWidth:'120px'}} onClick={() => handleEdit(enq)}>Edit</button>
+                <button
+                  onClick={() => setAutoReplyFor(enq)}
+                  style={{
+                    background: 'var(--gold)', border: '1px solid var(--gold)', color: 'var(--green-dark)',
+                    padding: '8px 16px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px',
+                    fontFamily: "'Montserrat', sans-serif", fontWeight: 600
+                  }}
+                >
+                  ✨ Auto-Reply
+                </button>
                 {(enq.client_type === 'Buyer' || enq.client_type === 'Both') && (
                   <button onClick={() => setConverting({ enquiry: enq, target: 'buyer' })}
                     style={{background:'transparent', border:'1px solid rgba(212,175,55,0.4)', color:'#F0C84A', padding:'8px 16px', borderRadius:'3px', cursor:'pointer', fontSize:'12px', fontFamily:"'Montserrat', sans-serif"}}>
@@ -342,6 +354,14 @@ export default function Enquiries({ agent, token }) {
             setConvertedMessage('Added to Sellers.');
             setTimeout(() => setConvertedMessage(''), 4000);
           }}
+        />
+      )}
+
+      {autoReplyFor && (
+        <AutoReplyModal
+          token={token}
+          enquiry={autoReplyFor}
+          onClose={() => setAutoReplyFor(null)}
         />
       )}
     </div>
