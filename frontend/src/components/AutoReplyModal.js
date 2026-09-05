@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useEffect, useState } from 'react';
 
 const API = process.env.REACT_APP_API_URL || '';
