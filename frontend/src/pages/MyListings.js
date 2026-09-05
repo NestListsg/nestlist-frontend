@@ -1499,8 +1499,8 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       <div
                         style={{
                           width: '100%',
-                          maxWidth: '320px',
-                          aspectRatio: '9 / 16',
+                          maxWidth: (l.signature_video_url && (videoTier[l.id] || 'signature') === 'signature') ? '460px' : '320px',
+                          aspectRatio: (l.signature_video_url && (videoTier[l.id] || 'signature') === 'signature') ? '4 / 3' : '9 / 16',
                           margin: '0 auto',
                           borderRadius: '4px',
                           border: '1px solid rgba(212,175,55,0.3)',
