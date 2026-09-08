@@ -410,8 +410,16 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   // trust it blindly -- fall back to photo 0 so we never show an empty
   // FEATURED tile or send an out-of-range photo_index to the backend.
   const getFeaturedIndex = (listing) => {
-    const raw = posterPhotoIndex[listing.id] || 0;
     const images = listing.images || [];
+    // A live click this session wins; otherwise fall back to the photo this
+    // listing's poster was last generated from (persisted on the listing), then
+    // photo 0 -- so the featured photo stays stable across reloads instead of
+    // silently reverting to image 0.
+    let raw = posterPhotoIndex[listing.id];
+    if (raw === undefined || raw === null) {
+      const persisted = listing.poster_photo_url ? images.indexOf(listing.poster_photo_url) : -1;
+      raw = persisted >= 0 ? persisted : 0;
+    }
     const inRange = raw >= 0 && raw < images.length;
     const broken = photoLoadError[`${listing.id}-${raw}`];
     return inRange && !broken ? raw : 0;
