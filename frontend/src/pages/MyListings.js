@@ -80,13 +80,13 @@ Against that backdrop, I'm currently representing a ${propertyContext}${listing.
 ${signOff}`;
 }
 
-// Prefers the new short, memorable link (nestlist.sg/enquiry/{agentCode}/{listingCode})
+// Prefers the new short, memorable link (nestlist.sg/{agentHandle}/{listingCode})
 // once the backend has attached both codes to the listing; falls back to the
 // legacy 8-char-id link for listings that predate the code backfill (or if the
 // codes haven't arrived on this listing yet for any other reason).
 function buildListingUrl(listing) {
   return (listing.agent_code && listing.code)
-    ? `nestlist.sg/enquiry/${encodeURIComponent(listing.agent_code)}/${encodeURIComponent(listing.code)}`
+    ? `nestlist.sg/${encodeURIComponent(listing.agent_code)}/${encodeURIComponent(listing.code)}`
     : `nestlist.sg/l/${listing.id.slice(0, 8)}`;
 }
 

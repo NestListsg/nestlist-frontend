@@ -246,11 +246,11 @@ function App() {
     <Router>
       <Routes>
         <Route path="/l/:listingId" element={<PublicListing />} />
-        <Route path="/enquiry/:agentCode/:listingCode" element={<PublicListing />} />
         <Route path="/auth/instagram/callback" element={<InstagramCallback />} />
         <Route path="/auth/facebook/callback" element={<FacebookCallback />} />
         <Route path="/auth/linkedin/callback" element={<LinkedInCallback />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/:handle/:listingCode" element={<PublicListing />} />
         <Route path="*" element={<AuthenticatedApp />} />
       </Routes>
     </Router>

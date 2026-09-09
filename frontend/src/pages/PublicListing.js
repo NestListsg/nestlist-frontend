@@ -8,7 +8,7 @@ const LOGO = '/logo_2.png';
 const emptyForm = { client_name: '', phone: '', email: '', message: '', website: '' };
 
 export default function PublicListing() {
-  const { listingId, agentCode, listingCode } = useParams();
+  const { listingId, handle, listingCode } = useParams();
   const [listing, setListing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -20,8 +20,8 @@ export default function PublicListing() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    const url = (agentCode && listingCode)
-      ? `${API}/api/public/enquiry/${agentCode}/${listingCode}`
+    const url = (handle && listingCode)
+      ? `${API}/api/public/enquiry/${handle}/${listingCode}`
       : `${API}/api/public/listings/${listingId}`;
     fetch(url)
       .then(r => {
@@ -31,7 +31,7 @@ export default function PublicListing() {
       .then(setListing)
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
-  }, [listingId, agentCode, listingCode]);
+  }, [listingId, handle, listingCode]);
 
   const cleanContent = (text) => (text || '').replace(/\*\*/g, '').replace(/---/g, '').replace(/# /g, '').trim();
 
