@@ -1542,7 +1542,10 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                     {l.video_url && (
                       <button
                         type="button"
-                        onClick={() => handleDownloadFile(l.video_url, `${l.id.slice(0, 8)}-video.mp4`)}
+                        onClick={() => {
+                          const isSig = l.signature_video_url && (videoTier[l.id] || 'signature') === 'signature';
+                          handleDownloadFile(isSig ? l.signature_video_url : l.video_url, `${l.id.slice(0, 8)}-${isSig ? 'signature' : 'classic'}.mp4`);
+                        }}
                         style={{
                           background: 'transparent',
                           border: '1px solid rgba(212,175,55,0.4)',
