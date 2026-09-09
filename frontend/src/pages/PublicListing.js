@@ -8,7 +8,7 @@ const LOGO = '/logo_2.png';
 const emptyForm = { client_name: '', phone: '', email: '', message: '', website: '' };
 
 export default function PublicListing() {
-  const { listingId } = useParams();
+  const { listingId, agentCode, listingCode } = useParams();
   const [listing, setListing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -20,7 +20,10 @@ export default function PublicListing() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    fetch(`${API}/api/public/listings/${listingId}`)
+    const url = (agentCode && listingCode)
+      ? `${API}/api/public/enquiry/${agentCode}/${listingCode}`
+      : `${API}/api/public/listings/${listingId}`;
+    fetch(url)
       .then(r => {
         if (!r.ok) throw new Error('not found');
         return r.json();
@@ -28,7 +31,7 @@ export default function PublicListing() {
       .then(setListing)
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
-  }, [listingId]);
+  }, [listingId, agentCode, listingCode]);
 
   const cleanContent = (text) => (text || '').replace(/\*\*/g, '').replace(/---/g, '').replace(/# /g, '').trim();
 
@@ -40,7 +43,7 @@ export default function PublicListing() {
       const res = await fetch(`${API}/api/public/enquiries`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ listing_id: listingId, ...form })
+        body: JSON.stringify({ listing_id: listing?.id || listingId, ...form })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Something went wrong. Please try again.');

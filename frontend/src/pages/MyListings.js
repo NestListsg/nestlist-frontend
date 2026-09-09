@@ -80,6 +80,16 @@ Against that backdrop, I'm currently representing a ${propertyContext}${listing.
 ${signOff}`;
 }
 
+// Prefers the new short, memorable link (nestlist.sg/enquiry/{agentCode}/{listingCode})
+// once the backend has attached both codes to the listing; falls back to the
+// legacy 8-char-id link for listings that predate the code backfill (or if the
+// codes haven't arrived on this listing yet for any other reason).
+function buildListingUrl(listing) {
+  return (listing.agent_code && listing.code)
+    ? `nestlist.sg/enquiry/${listing.agent_code}/${listing.code}`
+    : `nestlist.sg/l/${listing.id.slice(0, 8)}`;
+}
+
 function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) {
   if (platform === 'linkedin') return buildLinkedInInsightCaption(listing, agent, marketPulse);
 
@@ -92,7 +102,7 @@ function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) 
   const displayLocation = sanitizeLocation(listing.location);
   const maskedPrice = maskPrice(listing.price);
 
-  const listingUrl = `nestlist.sg/l/${listing.id.slice(0, 8)}`;
+  const listingUrl = buildListingUrl(listing);
   const cleanContent = (listing.content || '')
     .replace(/^---/gm, '')
     .replace(/\*\*/g, '')
@@ -266,7 +276,7 @@ const PLATFORMS = [
 // wa.me pre-fills the message text (caption + listing link) so agents land in a
 // ready-to-send chat instead of a blank WhatsApp Web tab they have to paste into.
 function buildWhatsAppShareUrl(listing, caption) {
-  const listingUrl = `https://nestlist.sg/l/${listing.id}`;
+  const listingUrl = `https://${buildListingUrl(listing)}`;
   const message = caption ? `${caption}\n\n${listingUrl}` : listingUrl;
   return `https://wa.me/?text=${encodeURIComponent(message)}`;
 }
@@ -578,7 +588,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       await navigator.share({
         title: `${listing.property_type} | ${sanitizeLocation(listing.location)}`,
         text: caption,
-        url: `https://nestlist.sg/l/${listing.id}`
+        url: `https://${buildListingUrl(listing)}`
       });
       setShareStatus(s => ({ ...s, [`${listing.id}-${platform}`]: 'Shared!' }));
       setTimeout(() => setShareStatus(s => ({ ...s, [`${listing.id}-${platform}`]: '' })), 2500);
