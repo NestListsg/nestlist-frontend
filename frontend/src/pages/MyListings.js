@@ -86,7 +86,7 @@ ${signOff}`;
 // codes haven't arrived on this listing yet for any other reason).
 function buildListingUrl(listing) {
   return (listing.agent_code && listing.code)
-    ? `nestlist.sg/enquiry/${listing.agent_code}/${listing.code}`
+    ? `nestlist.sg/enquiry/${encodeURIComponent(listing.agent_code)}/${encodeURIComponent(listing.code)}`
     : `nestlist.sg/l/${listing.id.slice(0, 8)}`;
 }
 
