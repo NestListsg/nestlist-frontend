@@ -92,7 +92,7 @@ function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) 
   const displayLocation = sanitizeLocation(listing.location);
   const maskedPrice = maskPrice(listing.price);
 
-  const listingUrl = `nestlist.sg/l/${listing.id}`;
+  const listingUrl = `nestlist.sg/l/${listing.id.slice(0, 8)}`;
   const cleanContent = (listing.content || '')
     .replace(/^---/gm, '')
     .replace(/\*\*/g, '')
@@ -144,7 +144,7 @@ Interested? Visit ${listingUrl} or drop us a message.
 
 ${bullets}
 
-DM me or visit ${listingUrl} 🏡
+Contact me or visit ${listingUrl} 🏡
 
 #NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #PropertyForSale`,
 
@@ -177,7 +177,7 @@ Interested? Visit ${listingUrl} or drop us a message.
 
 ${shortBody}...
 
-DM me or visit ${listingUrl} to find out more 🏡
+Contact me or visit ${listingUrl} to find out more 🏡
 
 #NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #SingaporeLife #PropertyInvestment #LandedHouse #Bungalow #PenthouseLiving #PropertyForSale`,
 
@@ -219,7 +219,7 @@ ${bullets}
 📖 THE STORY
 ${shortBody}...
 
-DM me or visit ${listingUrl} 🏡
+Contact me or visit ${listingUrl} 🏡
 
 #NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #PropertyForSale`,
 
