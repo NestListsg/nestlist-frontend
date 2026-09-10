@@ -21,6 +21,7 @@ import LinkedInCallback from './pages/LinkedInCallback';
 import ResetPassword from './pages/ResetPassword';
 import ChatWidget from './pages/ChatWidget';
 import PropertyTaxCalculator from './pages/PropertyTaxCalculator';
+import ClaimHandleModal from './components/ClaimHandleModal';
 
 const LOGO = '/logo_2.png';
 
@@ -134,6 +135,7 @@ function AuthenticatedApp() {
   const [selectedBuyerId, setSelectedBuyerId] = useState(null);
   const [selectedSellerId, setSelectedSellerId] = useState(null);
   const [activeListingId, setActiveListingId] = useState(null);
+  const [handlePromptDismissed, setHandlePromptDismissed] = useState(false);
   const isFirstPageRender = useRef(true);
 
   // Keep the URL in sync with the current page so reloads and shared links
@@ -237,6 +239,14 @@ function AuthenticatedApp() {
         {renderPage()}
       </div>
       <ChatWidget token={token} activeListingId={activeListingId} />
+      {!agent.code && !handlePromptDismissed && (
+        <ClaimHandleModal
+          agent={agent}
+          token={token}
+          onClaimed={updateAgent}
+          onDismiss={() => setHandlePromptDismissed(true)}
+        />
+      )}
     </div>
   );
 }
