@@ -58,23 +58,31 @@ export default function Login({ onLogin }) {
     setRegisterSuggestions([]);
   };
 
-  // Debounced availability check. Runs whenever `handle` settles for
+  // The backend trims leading/trailing hyphens when it slugifies the
+  // handle, but the input itself must not trim on every keystroke -- that
+  // would stop an agent typing a hyphen in the middle of a handle. So the
+  // raw `handle` stays the field's value, and this derived, untrimmed-at-
+  // the-edges view is what we show/check against, to match what actually
+  // gets stored ("-john" previews and checks as "john").
+  const cleanHandle = handle.replace(/^-+|-+$/g, '');
+
+  // Debounced availability check. Runs whenever `cleanHandle` settles for
   // ~400ms; the cleanup cancels the pending fetch's timer on every
   // keystroke so only the latest value is ever checked. `API` is a
   // module-level constant, not a reactive value, so it's intentionally
   // left out of the dependency array -- exhaustive-deps doesn't flag it.
   useEffect(() => {
-    if (!handle) { setHandleStatus(null); setHandleChecking(false); return; }
+    if (!cleanHandle) { setHandleStatus(null); setHandleChecking(false); return; }
     setHandleChecking(true);
     const timer = setTimeout(() => {
-      fetch(`${API}/api/public/handle-available/${handle}`)
+      fetch(`${API}/api/public/handle-available/${cleanHandle}`)
         .then(r => r.json())
         .then(data => setHandleStatus(data))
         .catch(() => setHandleStatus(null))
         .finally(() => setHandleChecking(false));
     }, 400);
     return () => clearTimeout(timer);
-  }, [handle]);
+  }, [cleanHandle]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -202,9 +210,9 @@ export default function Login({ onLogin }) {
               <label className="form-label">Your NestList Handle</label>
               <input className="form-input" name="handle" autoComplete="off" value={handle} onChange={e => handleHandleChange(e.target.value)} required />
               <div style={{ fontSize: '11px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
-                Your listings will live at nestlist.sg/{handle || '<handle>'}/…
+                Your listings will live at nestlist.sg/{cleanHandle || '<handle>'}/…
               </div>
-              {handle && (
+              {cleanHandle && (
                 <div style={{ fontSize: '11px', marginTop: '4px' }}>
                   {handleChecking ? (
                     <span style={{ color: 'rgba(248,244,236,0.5)' }}>Checking availability...</span>
