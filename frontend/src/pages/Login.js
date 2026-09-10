@@ -1,14 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LOGO_B64 } from '../config';
 import EyeIcon from '../components/EyeIcon';
 
 const API = '';
+
+// Keeps a handle typed (or auto-derived from the name) URL-safe as the user
+// types, rather than only validating on submit -- so spaces/uppercase/symbols
+// never make it into the field at all.
+const slugifyHandle = (s) => s
+  .toLowerCase()
+  .replace(/\s+/g, '-')
+  .replace(/[^a-z0-9-]/g, '')
+  .replace(/-+/g, '-');
 
 export default function Login({ onLogin }) {
   const [tab, setTab] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [handle, setHandle] = useState('');
+  const [handleTouched, setHandleTouched] = useState(false);
+  const [handleChecking, setHandleChecking] = useState(false);
+  const [handleStatus, setHandleStatus] = useState(null);
+  const [registerSuggestions, setRegisterSuggestions] = useState([]);
   const [agency, setAgency] = useState('');
   const [specialty, setSpecialty] = useState('Landed. GCB. Penthouses');
   const [password2, setPassword2] = useState('');
@@ -24,6 +38,43 @@ export default function Login({ onLogin }) {
     cursor: 'pointer', color: 'rgba(248,244,236,0.8)', fontSize: '16px',
     userSelect: 'none', lineHeight: '1'
   };
+
+  const handleNameChange = (v) => {
+    setName(v);
+    // Auto-derive the handle from the name only until the agent edits the
+    // handle field themselves -- handleTouched flips permanently at that
+    // point, so we never clobber a deliberate choice.
+    if (!handleTouched) setHandle(slugifyHandle(v));
+  };
+
+  const handleHandleChange = (v) => {
+    setHandleTouched(true);
+    setHandle(slugifyHandle(v));
+  };
+
+  const pickSuggestion = (s) => {
+    setHandleTouched(true);
+    setHandle(s);
+    setRegisterSuggestions([]);
+  };
+
+  // Debounced availability check. Runs whenever `handle` settles for
+  // ~400ms; the cleanup cancels the pending fetch's timer on every
+  // keystroke so only the latest value is ever checked. `API` is a
+  // module-level constant, not a reactive value, so it's intentionally
+  // left out of the dependency array -- exhaustive-deps doesn't flag it.
+  useEffect(() => {
+    if (!handle) { setHandleStatus(null); setHandleChecking(false); return; }
+    setHandleChecking(true);
+    const timer = setTimeout(() => {
+      fetch(`${API}/api/public/handle-available/${handle}`)
+        .then(r => r.json())
+        .then(data => setHandleStatus(data))
+        .catch(() => setHandleStatus(null))
+        .finally(() => setHandleChecking(false));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [handle]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -65,15 +116,18 @@ export default function Login({ onLogin }) {
     e.preventDefault();
     if (password !== password2) { setError('Passwords do not match'); return; }
     if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
-    setError(''); setLoading(true);
+    setError(''); setRegisterSuggestions([]); setLoading(true);
     try {
       const res = await fetch(`${API}/api/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name, agency, specialty })
+        body: JSON.stringify({ email, password, name, agency, specialty, username: handle })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Registration failed');
+      if (!res.ok) {
+        if (Array.isArray(data.suggestions)) setRegisterSuggestions(data.suggestions);
+        throw new Error(data.detail || 'Registration failed');
+      }
       onLogin(data.token, data.agent);
     } catch (err) {
       setError(err.message);
@@ -142,7 +196,38 @@ export default function Login({ onLogin }) {
           <form onSubmit={handleRegister}>
             <div className="form-group">
               <label className="form-label">Full Name</label>
-              <input className="form-input" name="name" autoComplete="name" value={name} onChange={e => setName(e.target.value)} required />
+              <input className="form-input" name="name" autoComplete="name" value={name} onChange={e => handleNameChange(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Your NestList Handle</label>
+              <input className="form-input" name="handle" autoComplete="off" value={handle} onChange={e => handleHandleChange(e.target.value)} required />
+              <div style={{ fontSize: '11px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
+                Your listings will live at nestlist.sg/{handle || '<handle>'}/…
+              </div>
+              {handle && (
+                <div style={{ fontSize: '11px', marginTop: '4px' }}>
+                  {handleChecking ? (
+                    <span style={{ color: 'rgba(248,244,236,0.5)' }}>Checking availability...</span>
+                  ) : handleStatus && handleStatus.available ? (
+                    <span style={{ color: '#4CAF50' }}>✓ available</span>
+                  ) : handleStatus && handleStatus.available === false ? (
+                    <span style={{ color: '#ff6b6b' }}>✗ {handleStatus.reason || 'That handle is taken'}</span>
+                  ) : null}
+                </div>
+              )}
+              {handleStatus && handleStatus.available === false && Array.isArray(handleStatus.suggestions) && handleStatus.suggestions.length > 0 && (
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+                  {handleStatus.suggestions.map(s => (
+                    <span
+                      key={s}
+                      onClick={() => pickSuggestion(s)}
+                      style={{ fontSize: '11px', padding: '3px 9px', border: '1px solid rgba(240,200,74,0.4)', borderRadius: '12px', color: '#F0C84A', cursor: 'pointer' }}
+                    >
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">Email</label>
@@ -178,6 +263,19 @@ export default function Login({ onLogin }) {
               </div>
             </div>
             {error && <div className="error-msg">{error}</div>}
+            {registerSuggestions.length > 0 && (
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+                {registerSuggestions.map(s => (
+                  <span
+                    key={s}
+                    onClick={() => pickSuggestion(s)}
+                    style={{ fontSize: '11px', padding: '3px 9px', border: '1px solid rgba(240,200,74,0.4)', borderRadius: '12px', color: '#F0C84A', cursor: 'pointer' }}
+                  >
+                    {s}
+                  </span>
+                ))}
+              </div>
+            )}
             <button className="btn-primary" type="submit" disabled={loading}>
               {loading ? 'Creating account...' : 'Create Account'}
             </button>
