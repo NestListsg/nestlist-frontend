@@ -28,7 +28,7 @@ const slugifyHandle = (s) => (s || '')
 // rendered outside this component, returned from a 409 on submit -- via
 // setValue. That avoids needing an onChange callback (whose identity a
 // parent may not keep stable) inside any effect's dependency array.
-const HandlePicker = forwardRef(function HandlePicker({ label, initialName, liveName }, ref) {
+const HandlePicker = forwardRef(function HandlePicker({ label, initialName, liveName, currentHandle }, ref) {
   const [handle, setHandle] = useState(() => slugifyHandle(initialName));
   const [touched, setTouched] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -52,13 +52,23 @@ const HandlePicker = forwardRef(function HandlePicker({ label, initialName, live
   // view is what's previewed/checked, to match what actually gets stored.
   const cleanHandle = handle.replace(/^[-.]+|[-.]+$/g, '');
 
+  // If the caller tells us this picker's current owner already holds
+  // `currentHandle` (the change-handle control in My Profile passes the
+  // agent's own code), and the field is still showing that same handle,
+  // there's nothing to check -- the public availability endpoint has no way
+  // to know the agent already owns it and would otherwise report it as
+  // taken, which reads as a confusing bug in the change-handle flow.
+  // Register and the claim-handle modal never pass currentHandle, so this
+  // is always false there and their behaviour is unchanged.
+  const isCurrentHandle = !!currentHandle && cleanHandle.toLowerCase() === currentHandle.toLowerCase();
+
   // Debounced availability check. Runs whenever `cleanHandle` settles for
   // ~400ms; the cleanup cancels the pending fetch's timer on every keystroke
   // so only the latest value is ever checked. `API` is a module-level
   // constant, not a reactive value, so it's intentionally left out of the
   // dependency array -- exhaustive-deps doesn't flag it.
   useEffect(() => {
-    if (!cleanHandle) { setStatus(null); setChecking(false); return; }
+    if (isCurrentHandle || !cleanHandle) { setStatus(null); setChecking(false); return; }
     setChecking(true);
     const timer = setTimeout(() => {
       fetch(`${API}/api/public/handle-available/${cleanHandle}`)
@@ -68,7 +78,7 @@ const HandlePicker = forwardRef(function HandlePicker({ label, initialName, live
         .finally(() => setChecking(false));
     }, 400);
     return () => clearTimeout(timer);
-  }, [cleanHandle]);
+  }, [cleanHandle, isCurrentHandle]);
 
   useImperativeHandle(ref, () => ({
     getValue: () => handle,
@@ -94,7 +104,9 @@ const HandlePicker = forwardRef(function HandlePicker({ label, initialName, live
       </div>
       {cleanHandle && (
         <div style={{ fontSize: '11px', marginTop: '4px' }}>
-          {checking ? (
+          {isCurrentHandle ? (
+            <span style={{ color: '#4CAF50' }}>✓ This is your current handle</span>
+          ) : checking ? (
             <span style={{ color: 'rgba(248,244,236,0.5)' }}>Checking availability...</span>
           ) : status && status.available ? (
             <span style={{ color: '#4CAF50' }}>✓ available</span>

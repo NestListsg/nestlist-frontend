@@ -470,7 +470,7 @@ export default function MyProfile({ agent, token, onUpdate }) {
           }}>
             ⚠️ Changing your handle updates the links for all your listings — any links you've already shared with your old handle will stop working.
           </div>
-          <HandlePicker ref={handlePickerRef} initialName={agent.code || agent.name || ''} />
+          <HandlePicker ref={handlePickerRef} initialName={agent.code || agent.name || ''} currentHandle={agent.code || ''} />
           {handleError && <div className="error-msg">{handleError}</div>}
           {handleSuggestions.length > 0 && (
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
