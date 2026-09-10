@@ -4,12 +4,16 @@ const API = process.env.REACT_APP_API_URL || '';
 
 // Keeps a handle typed (or auto-derived from a name) URL-safe as the user
 // types, rather than only validating on submit -- so spaces/uppercase/symbols
-// never make it into the field at all.
+// never make it into the field at all. Allowed characters are lowercase
+// letters, digits, "." and "-"; spaces become "-"; runs of 2+ separator
+// characters (whichever mix of "." and "-") collapse to just the first one
+// in the run, so "Steven Tan" -> "steven-tan" but "steven.tan" is left
+// alone -- the dot is a real, meaningful separator here, not noise to strip.
 const slugifyHandle = (s) => (s || '')
   .toLowerCase()
   .replace(/\s+/g, '-')
-  .replace(/[^a-z0-9-]/g, '')
-  .replace(/-+/g, '-');
+  .replace(/[^a-z0-9.-]/g, '')
+  .replace(/[-.]{2,}/g, (run) => run[0]);
 
 // Shared handle-picker UI: an input that auto-fills from `liveName` (while
 // untouched), a live nestlist.sg/<handle>/... preview, a debounced
@@ -40,12 +44,13 @@ const HandlePicker = forwardRef(function HandlePicker({ label, initialName, live
     if (!touched && liveName !== undefined) setHandle(slugifyHandle(liveName));
   }, [liveName, touched]);
 
-  // The backend trims leading/trailing hyphens when it slugifies the handle
-  // server-side, but the input itself must not trim on every keystroke --
-  // that would stop an agent typing a hyphen in the middle of a handle. So
+  // The backend trims leading/trailing separators ("." and "-") when it
+  // slugifies the handle server-side, but the input itself must not trim on
+  // every keystroke -- that would stop an agent typing a dot or hyphen in
+  // the middle of a handle (or right before adding more after it). So
   // `handle` stays the field's raw value, and this derived, edge-trimmed
   // view is what's previewed/checked, to match what actually gets stored.
-  const cleanHandle = handle.replace(/^-+|-+$/g, '');
+  const cleanHandle = handle.replace(/^[-.]+|[-.]+$/g, '');
 
   // Debounced availability check. Runs whenever `cleanHandle` settles for
   // ~400ms; the cleanup cancels the pending fetch's timer on every keystroke

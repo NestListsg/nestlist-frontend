@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import EyeIcon from '../components/EyeIcon';
+import HandlePicker from '../components/HandlePicker';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -39,6 +40,11 @@ export default function MyProfile({ agent, token, onUpdate }) {
   const [emailError, setEmailError] = useState('');
   const [emailSuccess, setEmailSuccess] = useState('');
   const [showEmailPassword, setShowEmailPassword] = useState(false);
+  const handlePickerRef = useRef(null);
+  const [handleSaving, setHandleSaving] = useState(false);
+  const [handleError, setHandleError] = useState('');
+  const [handleSuccess, setHandleSuccess] = useState('');
+  const [handleSuggestions, setHandleSuggestions] = useState([]);
 
   const eyeStyle = {
     position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
@@ -98,6 +104,33 @@ export default function MyProfile({ agent, token, onUpdate }) {
     } finally {
       setEmailSaving(false);
     }
+  };
+
+  const handleUpdateHandle = async () => {
+    setHandleSaving(true); setHandleError(''); setHandleSuccess(''); setHandleSuggestions([]);
+    try {
+      const res = await fetch(`${API}/api/agent/handle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ username: handlePickerRef.current ? handlePickerRef.current.getValue() : '' })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (Array.isArray(data.suggestions)) setHandleSuggestions(data.suggestions);
+        throw new Error(data.detail || 'That handle could not be set. Please try another.');
+      }
+      onUpdate(data.agent);
+      setHandleSuccess('Handle updated successfully.');
+    } catch (err) {
+      setHandleError(err.message);
+    } finally {
+      setHandleSaving(false);
+    }
+  };
+
+  const pickHandleSuggestion = (s) => {
+    if (handlePickerRef.current) handlePickerRef.current.setValue(s);
+    setHandleSuggestions([]);
   };
 
   const pollProfile = async () => {
@@ -415,6 +448,53 @@ export default function MyProfile({ agent, token, onUpdate }) {
             </div>
           )}
           {emailSuccess && <div className="success-msg">{emailSuccess}</div>}
+        </div>
+
+        <div className="divider" />
+        <div className="section-label">Handle / Username</div>
+        <div className="form-group">
+          <div style={{ fontSize: '13px', color: 'rgba(248,244,236,0.7)', marginBottom: '4px' }}>
+            {agent.code ? (
+              <>Current handle: <strong style={{ color: '#F0C84A' }}>{agent.code}</strong></>
+            ) : (
+              <>You haven't claimed a handle yet.</>
+            )}
+          </div>
+          <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '14px' }}>
+            Your public listing links use this: nestlist.sg/{agent.code || '<handle>'}/…
+          </div>
+          <div style={{
+            background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.3)',
+            borderRadius: '4px', padding: '10px 14px', fontSize: '12px', color: '#ff9b9b',
+            lineHeight: '1.6', marginBottom: '16px'
+          }}>
+            ⚠️ Changing your handle updates the links for all your listings — any links you've already shared with your old handle will stop working.
+          </div>
+          <HandlePicker ref={handlePickerRef} initialName={agent.code || agent.name || ''} />
+          {handleError && <div className="error-msg">{handleError}</div>}
+          {handleSuggestions.length > 0 && (
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+              {handleSuggestions.map(s => (
+                <span
+                  key={s}
+                  onClick={() => pickHandleSuggestion(s)}
+                  style={{ fontSize: '11px', padding: '3px 9px', border: '1px solid rgba(240,200,74,0.4)', borderRadius: '12px', color: '#F0C84A', cursor: 'pointer' }}
+                >
+                  {s}
+                </span>
+              ))}
+            </div>
+          )}
+          {handleSuccess && <div className="success-msg">{handleSuccess}</div>}
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={handleSaving}
+            onClick={handleUpdateHandle}
+            style={{ maxWidth: '200px', marginTop: '10px' }}
+          >
+            {handleSaving ? 'Updating...' : (agent.code ? 'Update Handle' : 'Set My Handle')}
+          </button>
         </div>
 
         <div className="divider" />
