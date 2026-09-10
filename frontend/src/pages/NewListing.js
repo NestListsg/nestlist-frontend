@@ -8,7 +8,7 @@ const DEFAULT_FORM = {
   property_type: 'Good Class Bungalow (GCB)', location: '', land_size: 0,
   built_up: 0, bedrooms: '', bathrooms: '', price: '', features: '',
   plot_width: 0, plot_depth: 0, storeys: 0, site_coverage: 0,
-  sg_citizen: true
+  sg_citizen: true, code: ''
 };
 
 export default function NewListing({ agent, token, editingListing, onDoneEditing }) {
@@ -29,7 +29,8 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         plot_depth: editingListing.plot_depth || 0,
         storeys: editingListing.storeys || 0,
         site_coverage: editingListing.site_coverage || 0,
-        sg_citizen: true
+        sg_citizen: true,
+        code: editingListing.code || ''
       };
     }
     try {
@@ -562,6 +563,19 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         <div className="form-group">
           <label className="form-label">Special Features</label>
           <textarea className="form-textarea" value={form.features} onChange={e => set('features', e.target.value)} placeholder="e.g. Private pool, 3-car garage, newly renovated" />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Listing Code (optional)</label>
+          <input
+            className="form-input"
+            value={form.code}
+            onChange={e => set('code', e.target.value)}
+            placeholder="e.g. NASSIM"
+          />
+          <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
+            The short code in your buyer link (nestlist.sg/&lt;handle&gt;/&lt;code&gt;). Auto-generated from the street — leave blank to auto-generate, or type your own.
+          </div>
         </div>
 
         {!isEditing && (

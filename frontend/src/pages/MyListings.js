@@ -1341,8 +1341,11 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                 padding: '16px'
               }}>
                 <div className="section-label" style={{ marginBottom: '4px' }}>📲 Share This Listing</div>
-                <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '14px' }}>
+                <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '10px' }}>
                   Select a platform and caption style. Copy and paste directly into your own account.
+                </div>
+                <div style={{ fontSize: '13px', color: '#F0C84A', marginBottom: '14px', wordBreak: 'break-all' }}>
+                  🔗 Your buyer link: {buildListingUrl(l)}
                 </div>
 
                 <div style={{
