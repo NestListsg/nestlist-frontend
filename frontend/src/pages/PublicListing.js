@@ -38,9 +38,12 @@ export default function PublicListing() {
       .finally(() => setLoading(false));
   };
 
+  // Note: this project's ESLint config does not register the react-hooks plugin, so a
+  // `// eslint-disable-next-line react-hooks/exhaustive-deps` comment here is itself a
+  // build-breaking error ("Definition for rule ... was not found"). There is no
+  // exhaustive-deps warning to suppress -- leave this dependency list as-is.
   useEffect(() => {
     loadListing();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listingId, handle, listingCode]);
 
   const cleanContent = (text) => (text || '').replace(/\*\*/g, '').replace(/---/g, '').replace(/# /g, '').trim();
