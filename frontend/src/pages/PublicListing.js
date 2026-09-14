@@ -12,6 +12,7 @@ export default function PublicListing() {
   const [listing, setListing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -19,18 +20,27 @@ export default function PublicListing() {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  useEffect(() => {
+  const loadListing = () => {
+    setLoading(true);
+    setNotFound(false);
+    setUnavailable(false);
     const url = (handle && listingCode)
       ? `${API}/api/public/enquiry/${handle}/${listingCode}`
       : `${API}/api/public/listings/${listingId}`;
     fetch(url)
       .then(r => {
-        if (!r.ok) throw new Error('not found');
+        if (r.status === 404) { setNotFound(true); return null; }
+        if (!r.ok) { setUnavailable(true); return null; }
         return r.json();
       })
-      .then(setListing)
-      .catch(() => setNotFound(true))
+      .then(data => { if (data) setListing(data); })
+      .catch(() => setUnavailable(true))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadListing();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listingId, handle, listingCode]);
 
   const cleanContent = (text) => (text || '').replace(/\*\*/g, '').replace(/---/g, '').replace(/# /g, '').trim();
@@ -67,6 +77,21 @@ export default function PublicListing() {
         <img src={LOGO} alt="NestList" style={{ height: '40px', marginBottom: '32px' }} />
         <div className="page-title">Listing Not Found</div>
         <div className="page-subtitle">This listing may have been removed or the link is incorrect.</div>
+      </div>
+    );
+  }
+
+  if (unavailable) {
+    return (
+      <div style={wrapStyle}>
+        <img src={LOGO} alt="NestList" style={{ height: '40px', marginBottom: '32px' }} />
+        <div className="page-title">Just a Moment</div>
+        <div className="page-subtitle">
+          This listing is fine — the page just couldn't load right now. Please try again in a moment.
+        </div>
+        <button className="btn-primary" style={{ marginTop: '20px', maxWidth: '200px' }} onClick={loadListing}>
+          Try Again
+        </button>
       </div>
     );
   }

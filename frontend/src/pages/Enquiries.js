@@ -305,7 +305,7 @@ export default function Enquiries({ agent, token }) {
                     fontFamily: "'Montserrat', sans-serif", fontWeight: 600
                   }}
                 >
-                  ✨ Auto-Reply
+                  ✨ Reply with Listing
                 </button>
                 {(enq.client_type === 'Buyer' || enq.client_type === 'Both') && (
                   <button onClick={() => setConverting({ enquiry: enq, target: 'buyer' })}

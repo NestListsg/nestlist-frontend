@@ -3,8 +3,9 @@ import React, { useEffect, useState } from 'react';
 
 const API = process.env.REACT_APP_API_URL || '';
 
-// NestList Auto-Reply: one click turns a buyer enquiry into a personalized WhatsApp
-// reply that carries the listing's video, poster and link -- not just plain text.
+// NestList Reply with Listing: one click drafts a personalized WhatsApp reply that
+// carries the listing's video, poster and link -- the agent reviews it and sends it
+// herself, it does not send anything automatically.
 export default function AutoReplyModal({ token, enquiry, onClose }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -70,10 +71,10 @@ export default function AutoReplyModal({ token, enquiry, onClose }) {
         onClick={e => e.stopPropagation()}
       >
         <div className="page-title" style={{ fontSize: '22px', marginBottom: '4px' }}>
-          ✨ Auto-Reply
+          ✨ Reply with Listing
         </div>
         <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '18px' }}>
-          For {enquiry.client_name}{enquiry.property_interest ? ` · ${enquiry.property_interest}` : ''}
+          Drafts a message for you to review and send — for {enquiry.client_name}{enquiry.property_interest ? ` · ${enquiry.property_interest}` : ''}
         </div>
 
         {loading && (
