@@ -60,6 +60,8 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const [contentSaving, setContentSaving] = useState(false);
   const [contentSaveError, setContentSaveError] = useState('');
   const [contentSaveSuccess, setContentSaveSuccess] = useState('');
+  const [writeupLoading, setWriteupLoading] = useState(false);
+  const [writeupError, setWriteupError] = useState('');
   const fileRef = useRef();
   const photoRef = useRef();
   const folderRef = useRef();
@@ -350,6 +352,50 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       setContentSaveError(err.message);
     } finally {
       setContentSaving(false);
+    }
+  };
+
+  const generateWriteup = async () => {
+    if (uploadedPhotoUrls.length === 0 || writeupLoading) return;
+    if (result?.listing?.content && result.listing.content.trim()) {
+      const proceed = window.confirm('This will replace your current write-up with a new AI-generated one. Continue?');
+      if (!proceed) return;
+    }
+    setWriteupLoading(true);
+    setWriteupError('');
+    try {
+      const res = await fetch(`${API}/api/listings/generate-writeup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          property_type: form.property_type,
+          location: form.location,
+          land_size: form.land_size,
+          built_up: form.built_up,
+          bedrooms: form.bedrooms,
+          bathrooms: form.bathrooms,
+          storeys: form.storeys,
+          features: form.features,
+          sg_citizen: form.sg_citizen,
+          plot_width: form.plot_width,
+          plot_depth: form.plot_depth,
+          site_coverage: form.site_coverage,
+          photo_urls: uploadedPhotoUrls
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to generate write-up');
+      // Drop the new write-up into the editable textarea rather than saving it
+      // straight away -- the agent should get to review/tweak before it's
+      // persisted via the existing Save button.
+      setEditedContent(data.writeup);
+      setContentSaveError('');
+      setContentSaveSuccess('');
+      setEditingContent(true);
+    } catch (err) {
+      setWriteupError("Couldn't generate a write-up right now — please try again.");
+    } finally {
+      setWriteupLoading(false);
     }
   };
 
@@ -648,12 +694,40 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
                 ) : (
                   <>
                     <div className="listing-text">{result.listing.content}</div>
-                    <button
-                      className="btn-gold" type="button" onClick={startEditContent}
-                      style={{ maxWidth: '220px', marginTop: '12px' }}
-                    >
-                      ✏️ Edit Write-Up
-                    </button>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px' }}>
+                      <button
+                        className="btn-gold" type="button" onClick={startEditContent}
+                        style={{ maxWidth: '220px' }}
+                      >
+                        ✏️ Edit Write-Up
+                      </button>
+                      <button
+                        type="button"
+                        onClick={generateWriteup}
+                        disabled={uploadedPhotoUrls.length === 0 || writeupLoading}
+                        title={uploadedPhotoUrls.length === 0 ? 'Upload photos first' : undefined}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid rgba(212,175,55,0.4)',
+                          color: '#F0C84A',
+                          padding: '0 20px',
+                          borderRadius: '3px',
+                          cursor: (uploadedPhotoUrls.length === 0 || writeupLoading) ? 'not-allowed' : 'pointer',
+                          fontSize: '13px',
+                          fontFamily: "'Montserrat', sans-serif",
+                          opacity: (uploadedPhotoUrls.length === 0 || writeupLoading) ? 0.5 : 1,
+                          maxWidth: '260px'
+                        }}
+                      >
+                        {writeupLoading ? <><span className="spinner" />Generating…</> : '✨ Generate Write-up from Photos'}
+                      </button>
+                    </div>
+                    {uploadedPhotoUrls.length === 0 && (
+                      <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
+                        Upload photos first — write-up generation reads your property photos.
+                      </div>
+                    )}
+                    {writeupError && <div className="error-msg" style={{ marginTop: '10px' }}>{writeupError}</div>}
                     {contentSaveSuccess && <div className="success-msg" style={{ marginTop: '10px' }}>{contentSaveSuccess}</div>}
                   </>
                 )}
