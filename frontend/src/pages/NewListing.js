@@ -3,6 +3,13 @@ import { millionsToFullNumber, fullNumberToMillions } from '../utils/format';
 
 const API = process.env.REACT_APP_API_URL || '';
 const STORAGE_KEY = 'nestlist_new_listing_form';
+// PLACEHOLDER: backend is building a photo-staging endpoint that uploads the
+// listing's property photos before the listing itself exists and hands back
+// their URLs, so those URLs can ride along in the /api/listings/generate
+// call. Path and response shape below are guesses pending the orchestrator
+// relaying the confirmed contract -- this constant (and the response field
+// read in handleStagePhotos) are the only things that need to change.
+const STAGE_PHOTOS_PATH = '/api/listings/stage-photos';
 
 const DEFAULT_FORM = {
   property_type: 'Good Class Bungalow (GCB)', location: '', land_size: 0,
@@ -60,11 +67,16 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const [contentSaving, setContentSaving] = useState(false);
   const [contentSaveError, setContentSaveError] = useState('');
   const [contentSaveSuccess, setContentSaveSuccess] = useState('');
-  const [writeupLoading, setWriteupLoading] = useState(false);
-  const [writeupError, setWriteupError] = useState('');
+  const [photoStageLoading, setPhotoStageLoading] = useState(false);
+  const [photoStageLoadingLabel, setPhotoStageLoadingLabel] = useState('Uploading photos...');
+  const [photoStageSuccess, setPhotoStageSuccess] = useState('');
+  const [photoStageError, setPhotoStageError] = useState('');
+  const [stagedPhotoUrls, setStagedPhotoUrls] = useState([]);
   const fileRef = useRef();
   const photoRef = useRef();
   const folderRef = useRef();
+  const stagePhotoRef = useRef();
+  const stageFolderRef = useRef();
 
   // Persist form to localStorage whenever it changes (skip while editing an existing listing)
   useEffect(() => {
@@ -103,8 +115,119 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     setUploadedPhotoUrls([]);
     setImagePreviews([]);
     setImageSuccess('');
+    setStagedPhotoUrls([]);
+    setPhotoStageSuccess('');
+    setPhotoStageError('');
     if (fileRef.current) fileRef.current.value = '';
     if (photoRef.current) photoRef.current.value = '';
+    if (stagePhotoRef.current) stagePhotoRef.current.value = '';
+    if (stageFolderRef.current) stageFolderRef.current.value = '';
+  };
+
+  // Uploads the listing's property photos before the listing exists, so
+  // their URLs can ride along in /api/listings/generate and the write-up
+  // gets generated from photos + fields together. Downscaled client-side
+  // the same way Step 3's per-listing upload does (max 1920px JPEG) to keep
+  // the request comfortably under the production edge proxy's body limit --
+  // that limit is what silently broke photo uploads before (see the batching
+  // comment further down). This call is intentionally a single POST rather
+  // than batched: the staging endpoint's contract isn't confirmed yet, and
+  // guessing at multi-call append semantics risks silently dropping photos
+  // if a later batch overwrites an earlier one instead of appending.
+  const handleStagePhotos = async (e) => {
+    const allFiles = Array.from(e.target.files);
+    const files = allFiles
+      .filter(f => f.type === 'application/pdf' || f.type.startsWith('image/'))
+      .slice(0, 15);
+    if (!files.length) return;
+    setPhotoStageLoading(true);
+    setPhotoStageSuccess('');
+    setPhotoStageError('');
+    try {
+      const readFile = (file) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve({
+          image_data: ev.target.result.split(',')[1],
+          media_type: file.type
+        });
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const downscaleOrRead = (file) => new Promise((resolve) => {
+        const objectUrl = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          try {
+            const maxDim = 1920;
+            const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(img.width * scale));
+            canvas.height = Math.max(1, Math.round(img.height * scale));
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            resolve({ image_data: dataUrl.split(',')[1], media_type: 'image/jpeg' });
+          } catch {
+            readFile(file).then(resolve, () => resolve(null));
+          }
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          readFile(file).then(resolve, () => resolve(null));
+        };
+        img.src = objectUrl;
+      });
+
+      const pdfFiles = files.filter(f => f.type === 'application/pdf');
+      const imageFiles = files.filter(f => f.type.startsWith('image/'));
+      const imageResults = (await Promise.all(imageFiles.map(downscaleOrRead))).filter(Boolean);
+
+      let pdfExtractedImages = [];
+      if (pdfFiles.length > 0) {
+        setPhotoStageLoadingLabel(pdfFiles.length > 1 ? 'Extracting photos from PDFs...' : 'Extracting photos from PDF...');
+        const pdfReads = await Promise.all(pdfFiles.map(readFile));
+        const perPdfResults = await Promise.all(pdfReads.map(async ({ image_data }) => {
+          const res = await fetch(`${API}/api/listings/extract-pdf-photos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ pdf_data: image_data })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || 'Failed to extract photos from PDF');
+          return data;
+        }));
+        pdfExtractedImages = perPdfResults.flatMap(r => r.images || []);
+        setPhotoStageLoadingLabel('Uploading photos...');
+      }
+
+      const images = [...imageResults, ...pdfExtractedImages].slice(0, 15);
+      if (!images.length) throw new Error('No photos found to upload.');
+
+      setPhotoStageLoadingLabel(`Uploading ${images.length} photo${images.length === 1 ? '' : 's'}...`);
+      const response = await fetch(`${API}${STAGE_PHOTOS_PATH}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ images })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Failed to upload photos');
+      // PLACEHOLDER: assumes the staging endpoint responds with { photo_urls }.
+      const committedUrls = data.photo_urls || [];
+      setStagedPhotoUrls(committedUrls);
+      const stagedCount = committedUrls.length;
+      const pdfNote = pdfExtractedImages.length > 0 ? ` (${pdfExtractedImages.length} extracted from PDF)` : '';
+      setPhotoStageSuccess(`${stagedCount} photo${stagedCount === 1 ? '' : 's'} ready for your listing!${pdfNote}`);
+    } catch (err) {
+      setPhotoStageError(`Failed to upload photos: ${err.message}`);
+    } finally {
+      setPhotoStageLoading(false);
+      setPhotoStageLoadingLabel('Uploading photos...');
+    }
+  };
+
+  const removeStagedPhoto = (indexToRemove) => {
+    setStagedPhotoUrls(prev => prev.filter((_, i) => i !== indexToRemove));
   };
 
   const handleImageUpload = async (e) => {
@@ -355,50 +478,6 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     }
   };
 
-  const generateWriteup = async () => {
-    if (uploadedPhotoUrls.length === 0 || writeupLoading) return;
-    if (result?.listing?.content && result.listing.content.trim()) {
-      const proceed = window.confirm('This will replace your current write-up with a new AI-generated one. Continue?');
-      if (!proceed) return;
-    }
-    setWriteupLoading(true);
-    setWriteupError('');
-    try {
-      const res = await fetch(`${API}/api/listings/generate-writeup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          property_type: form.property_type,
-          location: form.location,
-          land_size: form.land_size,
-          built_up: form.built_up,
-          bedrooms: form.bedrooms,
-          bathrooms: form.bathrooms,
-          storeys: form.storeys,
-          features: form.features,
-          sg_citizen: form.sg_citizen,
-          plot_width: form.plot_width,
-          plot_depth: form.plot_depth,
-          site_coverage: form.site_coverage,
-          photo_urls: uploadedPhotoUrls
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Failed to generate write-up');
-      // Drop the new write-up into the editable textarea rather than saving it
-      // straight away -- the agent should get to review/tweak before it's
-      // persisted via the existing Save button.
-      setEditedContent(data.writeup);
-      setContentSaveError('');
-      setContentSaveSuccess('');
-      setEditingContent(true);
-    } catch (err) {
-      setWriteupError("Couldn't generate a write-up right now — please try again.");
-    } finally {
-      setWriteupLoading(false);
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.property_type) {
@@ -426,7 +505,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       const res = await fetch(`${API}/api/listings/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ ...payload, photo_urls: stagedPhotoUrls })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Error generating listing');
@@ -625,6 +704,80 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         </div>
 
         {!isEditing && (
+          <div style={{
+            background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.3)',
+            borderRadius: '4px', padding: '20px 24px', marginBottom: '24px'
+          }}>
+            <div className="section-label" style={{ marginBottom: '10px' }}>Upload Property Photos</div>
+            <div style={{ fontSize: '13px', color: 'rgba(248,244,236,0.65)', marginBottom: '14px' }}>
+              Upload up to 15 property photos, a PDF brochure/marketing kit (every photo inside it is
+              extracted automatically), or an entire folder of photos at once. Claude reads these to write
+              your listing description, and they'll be saved to the listing for social media posts.
+            </div>
+            <input type="file" accept="image/*,application/pdf" ref={stagePhotoRef} multiple style={{ display: 'none' }} onChange={handleStagePhotos} />
+            <input type="file" accept="image/*" ref={stageFolderRef} multiple webkitdirectory="" directory="" style={{ display: 'none' }} onChange={handleStagePhotos} />
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                className="btn-gold" type="button" style={{ maxWidth: '320px' }}
+                onClick={() => stagePhotoRef.current.click()} disabled={photoStageLoading}
+              >
+                {photoStageLoading ? <><span className="spinner" />{photoStageLoadingLabel}</> : 'Upload Property Photos or PDF'}
+              </button>
+              <button
+                type="button"
+                onClick={() => stageFolderRef.current.click()} disabled={photoStageLoading}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(212,175,55,0.4)',
+                  color: '#F0C84A',
+                  padding: '0 20px',
+                  borderRadius: '3px',
+                  cursor: photoStageLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '13px',
+                  fontFamily: "'Montserrat', sans-serif",
+                  opacity: photoStageLoading ? 0.5 : 1
+                }}
+              >
+                Upload From a Folder
+              </button>
+            </div>
+
+            {photoStageError && <div className="error-msg" style={{ marginTop: '12px' }}>{photoStageError}</div>}
+            {photoStageSuccess && <div className="success-msg" style={{ marginTop: '12px' }}>{photoStageSuccess}</div>}
+
+            {stagedPhotoUrls.length > 0 && (
+              <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {stagedPhotoUrls.map((url, i) => (
+                  <div key={i} style={{ position: 'relative' }}>
+                    <img
+                      src={url} alt={`Property ${i + 1}`}
+                      style={{ width: '150px', height: '120px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(212,175,55,0.3)' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeStagedPhoto(i)}
+                      title="Remove this photo"
+                      style={{
+                        position: 'absolute', top: '4px', right: '4px',
+                        background: 'rgba(0,0,0,0.7)', border: 'none',
+                        color: '#ff6b6b', borderRadius: '50%',
+                        width: '22px', height: '22px',
+                        cursor: 'pointer', fontSize: '14px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontFamily: "'Montserrat', sans-serif",
+                        lineHeight: '1'
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!isEditing && (
           <div className="form-checkbox">
             <input type="checkbox" id="declaration" checked={declaration} onChange={e => setDeclaration(e.target.checked)} />
             <label htmlFor="declaration">I confirm all details are accurate and truthful.</label>
@@ -645,9 +798,11 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
           >
             {isEditing ? 'Cancel' : 'Clear Form'}
           </button>
-          <button className="btn-primary" type="submit" disabled={loading}>
+          <button className="btn-primary" type="submit" disabled={loading || photoStageLoading}>
             {loading
               ? <><span className="spinner" />{isEditing ? 'Saving...' : 'Generating your listing...'}</>
+              : photoStageLoading
+              ? <><span className="spinner" />Waiting for photos to finish uploading...</>
               : (isConvertingSeller ? '🏡 Publish as Listing' : isEditing ? 'Save Changes' : 'Generate My Listing Automatically')}
           </button>
         </div>
@@ -694,40 +849,12 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
                 ) : (
                   <>
                     <div className="listing-text">{result.listing.content}</div>
-                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px' }}>
-                      <button
-                        className="btn-gold" type="button" onClick={startEditContent}
-                        style={{ maxWidth: '220px' }}
-                      >
-                        ✏️ Edit Write-Up
-                      </button>
-                      <button
-                        type="button"
-                        onClick={generateWriteup}
-                        disabled={uploadedPhotoUrls.length === 0 || writeupLoading}
-                        title={uploadedPhotoUrls.length === 0 ? 'Upload photos first' : undefined}
-                        style={{
-                          background: 'transparent',
-                          border: '1px solid rgba(212,175,55,0.4)',
-                          color: '#F0C84A',
-                          padding: '0 20px',
-                          borderRadius: '3px',
-                          cursor: (uploadedPhotoUrls.length === 0 || writeupLoading) ? 'not-allowed' : 'pointer',
-                          fontSize: '13px',
-                          fontFamily: "'Montserrat', sans-serif",
-                          opacity: (uploadedPhotoUrls.length === 0 || writeupLoading) ? 0.5 : 1,
-                          maxWidth: '260px'
-                        }}
-                      >
-                        {writeupLoading ? <><span className="spinner" />Generating…</> : '✨ Generate Write-up from Photos'}
-                      </button>
-                    </div>
-                    {uploadedPhotoUrls.length === 0 && (
-                      <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
-                        Upload photos first — write-up generation reads your property photos.
-                      </div>
-                    )}
-                    {writeupError && <div className="error-msg" style={{ marginTop: '10px' }}>{writeupError}</div>}
+                    <button
+                      className="btn-gold" type="button" onClick={startEditContent}
+                      style={{ maxWidth: '220px', marginTop: '12px' }}
+                    >
+                      ✏️ Edit Write-Up
+                    </button>
                     {contentSaveSuccess && <div className="success-msg" style={{ marginTop: '10px' }}>{contentSaveSuccess}</div>}
                   </>
                 )}
