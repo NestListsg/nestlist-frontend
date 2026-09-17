@@ -61,6 +61,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const [photoSuccess, setPhotoSuccess] = useState('');
   const [photoError, setPhotoError] = useState('');
   const [uploadedPhotoUrls, setUploadedPhotoUrls] = useState([]);
+  const [showReplacePhotos, setShowReplacePhotos] = useState(false);
   const [propertyTypeInvalid, setPropertyTypeInvalid] = useState(false);
   const [editingContent, setEditingContent] = useState(false);
   const [editedContent, setEditedContent] = useState('');
@@ -113,6 +114,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     setPhotoSuccess('');
     setPhotoError('');
     setUploadedPhotoUrls([]);
+    setShowReplacePhotos(false);
     setImagePreviews([]);
     setImageSuccess('');
     setStagedPhotoUrls([]);
@@ -204,16 +206,25 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       const images = [...imageResults, ...pdfExtractedImages].slice(0, 15);
       if (!images.length) throw new Error('No photos found to upload.');
 
-      setPhotoStageLoadingLabel(`Uploading ${images.length} photo${images.length === 1 ? '' : 's'}...`);
-      const response = await fetch(`${API}${STAGE_PHOTOS_PATH}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ images })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || 'Failed to upload photos');
-      // PLACEHOLDER: assumes the staging endpoint responds with { photo_urls }.
-      const committedUrls = data.photo_urls || [];
+      // The staging endpoint is stateless by design (no upload_session/
+      // finalize bookkeeping) -- send a few images per POST and concatenate
+      // the photo_urls each chunk returns, in order. Chunking keeps every
+      // request comfortably under the production edge proxy's ~10MB body
+      // limit, which is what silently broke photo uploads before.
+      const CHUNK_SIZE = 4;
+      let committedUrls = [];
+      for (let start = 0; start < images.length; start += CHUNK_SIZE) {
+        const chunk = images.slice(start, start + CHUNK_SIZE);
+        setPhotoStageLoadingLabel(`Uploading photos ${Math.min(start + chunk.length, images.length)} of ${images.length}...`);
+        const response = await fetch(`${API}${STAGE_PHOTOS_PATH}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ images: chunk })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Failed to upload photos');
+        committedUrls = committedUrls.concat(data.photo_urls || []);
+      }
       setStagedPhotoUrls(committedUrls);
       const stagedCount = committedUrls.length;
       const pdfNote = pdfExtractedImages.length > 0 ? ` (${pdfExtractedImages.length} extracted from PDF)` : '';
@@ -510,6 +521,12 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Error generating listing');
       setResult(data);
+      // Backend attaches the staged photos to the new listing during
+      // /generate and hands them back on data.listing.images -- show those
+      // immediately on the result screen so the agent sees their photos are
+      // already on the listing, instead of an empty-looking upload box.
+      setUploadedPhotoUrls(data.listing?.images || []);
+      setShowReplacePhotos(false);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -861,70 +878,109 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
               </div>
 
               <div className="divider" />
-              <div className="section-label">Step 3 - Upload Property Photos</div>
-              <div style={{ fontSize: '13px', color: 'rgba(248,244,236,0.65)', marginBottom: '14px' }}>
-                Upload up to 15 property photos, a PDF brochure/marketing kit (every photo inside it is
-                extracted automatically), or an entire folder of photos at once. These will be saved to your
-                listing and used for social media posts.
-              </div>
-              <input type="file" accept="image/*,application/pdf" ref={photoRef} multiple style={{ display: 'none' }} onChange={handlePhotoUpload} />
-              <input type="file" accept="image/*" ref={folderRef} multiple webkitdirectory="" directory="" style={{ display: 'none' }} onChange={handlePhotoUpload} />
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <button
-                  className="btn-gold" type="button" style={{ maxWidth: '320px' }}
-                  onClick={() => photoRef.current.click()} disabled={photoLoading}
-                >
-                  {photoLoading ? <><span className="spinner" />{photoLoadingLabel}</> : 'Upload Property Photos or PDF'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => folderRef.current.click()} disabled={photoLoading}
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid rgba(212,175,55,0.4)',
-                    color: '#F0C84A',
-                    padding: '0 20px',
-                    borderRadius: '3px',
-                    cursor: photoLoading ? 'not-allowed' : 'pointer',
-                    fontSize: '13px',
-                    fontFamily: "'Montserrat', sans-serif",
-                    opacity: photoLoading ? 0.5 : 1
-                  }}
-                >
-                  Upload From a Folder
-                </button>
-              </div>
+              <div className="section-label">Step 3 - Your Listing Photos</div>
 
-              {photoError && <div className="error-msg" style={{ marginTop: '12px' }}>{photoError}</div>}
-              {photoSuccess && <div className="success-msg" style={{ marginTop: '12px' }}>{photoSuccess}</div>}
+              {uploadedPhotoUrls.length > 0 ? (
+                <>
+                  <div style={{ fontSize: '13px', color: 'rgba(248,244,236,0.65)', marginBottom: '14px' }}>
+                    These photos are saved to your listing and ready for social media posts.
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {uploadedPhotoUrls.map((url, i) => (
+                      <div key={i} style={{ position: 'relative' }}>
+                        <img
+                          src={url} alt={`Property ${i + 1}`}
+                          style={{ width: '150px', height: '120px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(212,175,55,0.3)' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeUploadedPhoto(i)}
+                          title="Remove this photo"
+                          style={{
+                            position: 'absolute', top: '4px', right: '4px',
+                            background: 'rgba(0,0,0,0.7)', border: 'none',
+                            color: '#ff6b6b', borderRadius: '50%',
+                            width: '22px', height: '22px',
+                            cursor: 'pointer', fontSize: '14px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontFamily: "'Montserrat', sans-serif",
+                            lineHeight: '1'
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  {!showReplacePhotos && (
+                    <button
+                      type="button" onClick={() => setShowReplacePhotos(true)}
+                      style={{
+                        marginTop: '10px', background: 'transparent', border: 'none',
+                        color: '#F0C84A', textDecoration: 'underline', cursor: 'pointer',
+                        fontSize: '12px', fontFamily: "'Montserrat', sans-serif", padding: 0
+                      }}
+                    >
+                      Replace All Photos
+                    </button>
+                  )}
+                </>
+              ) : (
+                <div style={{ fontSize: '13px', color: 'rgba(248,244,236,0.65)', marginBottom: '14px' }}>
+                  No photos on this listing yet — upload some below so they're saved and ready for social media posts.
+                </div>
+              )}
 
-              {uploadedPhotoUrls.length > 0 && (
-                <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {uploadedPhotoUrls.map((url, i) => (
-                    <div key={i} style={{ position: 'relative' }}>
-                      <img
-                        src={url} alt={`Property ${i + 1}`}
-                        style={{ width: '150px', height: '120px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(212,175,55,0.3)' }}
-                      />
+              {(uploadedPhotoUrls.length === 0 || showReplacePhotos) && (
+                <div style={uploadedPhotoUrls.length > 0 ? { marginTop: '14px' } : undefined}>
+                  {uploadedPhotoUrls.length > 0 && (
+                    <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '10px' }}>
+                      Uploading here replaces all {uploadedPhotoUrls.length} existing photo{uploadedPhotoUrls.length === 1 ? '' : 's'} on this listing — it doesn't add to them.
+                    </div>
+                  )}
+                  <input type="file" accept="image/*,application/pdf" ref={photoRef} multiple style={{ display: 'none' }} onChange={handlePhotoUpload} />
+                  <input type="file" accept="image/*" ref={folderRef} multiple webkitdirectory="" directory="" style={{ display: 'none' }} onChange={handlePhotoUpload} />
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <button
+                      className="btn-gold" type="button" style={{ maxWidth: '320px' }}
+                      onClick={() => photoRef.current.click()} disabled={photoLoading}
+                    >
+                      {photoLoading ? <><span className="spinner" />{photoLoadingLabel}</> : uploadedPhotoUrls.length > 0 ? 'Replace With New Photos or PDF' : 'Upload Property Photos or PDF'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => folderRef.current.click()} disabled={photoLoading}
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid rgba(212,175,55,0.4)',
+                        color: '#F0C84A',
+                        padding: '0 20px',
+                        borderRadius: '3px',
+                        cursor: photoLoading ? 'not-allowed' : 'pointer',
+                        fontSize: '13px',
+                        fontFamily: "'Montserrat', sans-serif",
+                        opacity: photoLoading ? 0.5 : 1
+                      }}
+                    >
+                      Upload From a Folder
+                    </button>
+                    {showReplacePhotos && (
                       <button
-                        type="button"
-                        onClick={() => removeUploadedPhoto(i)}
-                        title="Remove this photo"
+                        type="button" onClick={() => setShowReplacePhotos(false)} disabled={photoLoading}
                         style={{
-                          position: 'absolute', top: '4px', right: '4px',
-                          background: 'rgba(0,0,0,0.7)', border: 'none',
-                          color: '#ff6b6b', borderRadius: '50%',
-                          width: '22px', height: '22px',
-                          cursor: 'pointer', fontSize: '14px',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontFamily: "'Montserrat', sans-serif",
-                          lineHeight: '1'
+                          background: 'transparent', border: '1px solid rgba(248,244,236,0.25)',
+                          color: 'rgba(248,244,236,0.6)', padding: '0 16px', borderRadius: '3px',
+                          cursor: photoLoading ? 'not-allowed' : 'pointer', fontSize: '13px',
+                          fontFamily: "'Montserrat', sans-serif", opacity: photoLoading ? 0.5 : 1
                         }}
                       >
-                        ×
+                        Cancel
                       </button>
-                    </div>
-                  ))}
+                    )}
+                  </div>
+
+                  {photoError && <div className="error-msg" style={{ marginTop: '12px' }}>{photoError}</div>}
+                  {photoSuccess && <div className="success-msg" style={{ marginTop: '12px' }}>{photoSuccess}</div>}
                 </div>
               )}
 
