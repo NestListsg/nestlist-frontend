@@ -11,8 +11,43 @@ const STORAGE_KEY = 'nestlist_new_listing_form';
 // read in handleStagePhotos) are the only things that need to change.
 const STAGE_PHOTOS_PATH = '/api/listings/stage-photos';
 
+// Singapore's 28 postal districts, with short area hints for usability.
+// Stored form value is just the district number as a string ("1".."28"),
+// "" meaning unset -- the agent picks it (or Smart Fill pre-selects it), we
+// never try to derive it from the street ourselves.
+const SG_DISTRICTS = [
+  { value: '1', label: 'District 1 — Raffles Place / Marina / Cecil' },
+  { value: '2', label: 'District 2 — Tanjong Pagar / Anson' },
+  { value: '3', label: 'District 3 — Queenstown / Tiong Bahru' },
+  { value: '4', label: 'District 4 — Sentosa / Harbourfront' },
+  { value: '5', label: 'District 5 — Buona Vista / West Coast / Clementi' },
+  { value: '6', label: 'District 6 — City Hall / Clarke Quay' },
+  { value: '7', label: 'District 7 — Bugis / Beach Road' },
+  { value: '8', label: 'District 8 — Little India / Farrer Park' },
+  { value: '9', label: 'District 9 — Orchard / River Valley' },
+  { value: '10', label: 'District 10 — Bukit Timah / Holland' },
+  { value: '11', label: 'District 11 — Novena / Thomson / Watten Estate' },
+  { value: '12', label: 'District 12 — Toa Payoh / Balestier / Serangoon' },
+  { value: '13', label: 'District 13 — Macpherson / Potong Pasir' },
+  { value: '14', label: 'District 14 — Geylang / Paya Lebar / Eunos' },
+  { value: '15', label: 'District 15 — Katong / Marine Parade / Siglap' },
+  { value: '16', label: 'District 16 — Bedok / Upper East Coast' },
+  { value: '17', label: 'District 17 — Changi / Loyang' },
+  { value: '18', label: 'District 18 — Tampines / Pasir Ris' },
+  { value: '19', label: 'District 19 — Hougang / Punggol / Sengkang' },
+  { value: '20', label: 'District 20 — Bishan / Ang Mo Kio' },
+  { value: '21', label: 'District 21 — Clementi Park / Upper Bukit Timah' },
+  { value: '22', label: 'District 22 — Jurong / Boon Lay' },
+  { value: '23', label: 'District 23 — Bukit Panjang / Choa Chu Kang / Hillview' },
+  { value: '24', label: 'District 24 — Lim Chu Kang / Tengah' },
+  { value: '25', label: 'District 25 — Kranji / Woodlands' },
+  { value: '26', label: 'District 26 — Upper Thomson / Springleaf' },
+  { value: '27', label: 'District 27 — Yishun / Sembawang' },
+  { value: '28', label: 'District 28 — Seletar / Yio Chu Kang' }
+];
+
 const DEFAULT_FORM = {
-  property_type: 'Good Class Bungalow (GCB)', location: '', land_size: 0,
+  property_type: 'Good Class Bungalow (GCB)', location: '', district: '', land_size: 0,
   built_up: 0, bedrooms: '', bathrooms: '', price: '', features: '',
   plot_width: 0, plot_depth: 0, storeys: 0, site_coverage: 0,
   sg_citizen: true, code: ''
@@ -26,6 +61,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       return {
         property_type: editingListing.property_type || DEFAULT_FORM.property_type,
         location: editingListing.location || '',
+        district: editingListing.district ? String(editingListing.district) : '',
         land_size: editingListing.land_size || 0,
         built_up: editingListing.built_up || 0,
         bedrooms: editingListing.bedrooms || '',
@@ -276,6 +312,15 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       const extracted = await response.json();
       if (!response.ok) throw new Error(extracted.detail || 'Failed to read image');
       if (extracted.price) extracted.price = fullNumberToMillions(extracted.price);
+      // Pre-select district only when Smart Fill actually detected one --
+      // never overwrite an existing/blank selection with an empty value.
+      // We never guess the district ourselves (e.g. from the street); it's
+      // either read here from what the backend detected, or picked by hand.
+      if (extracted.district === undefined || extracted.district === null || extracted.district === '') {
+        delete extracted.district;
+      } else {
+        extracted.district = String(extracted.district);
+      }
       setForm(f => ({ ...f, ...extracted }));
       setImageSuccess(`Details extracted from ${files.length} image${files.length > 1 ? 's' : ''}! Please review and adjust if needed.`);
     } catch (err) {
@@ -660,6 +705,16 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
             <div className="form-group">
               <label className="form-label">2. Location</label>
               <input className="form-input" value={form.location} onChange={e => set('location', e.target.value)} placeholder="e.g. Nassim Road, District 10" required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">2b. District (optional)</label>
+              <select className="form-select" value={form.district} onChange={e => set('district', e.target.value)}>
+                <option value="">-- Select District (optional) --</option>
+                {SG_DISTRICTS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+              </select>
+              <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
+                Used in your write-up. Smart Fill will pre-select this if your screenshots state it — otherwise pick it yourself.
+              </div>
             </div>
             <div className="form-group">
               <label className="form-label">3. Land Size (sqft)</label>
