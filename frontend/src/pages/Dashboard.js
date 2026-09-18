@@ -3,6 +3,28 @@ import { formatPriceM } from '../utils/format';
 
 const API = process.env.REACT_APP_API_URL || '';
 
+// The "LIVE" badge must actually mean live -- a URA refresh that silently
+// stopped succeeding days ago shouldn't still read as fresh. 2 days is the
+// cutoff; refreshed_at is day-precision so this comfortably covers a normal
+// once-a-day refresh cadence without flapping.
+const REFRESH_FRESH_MS = 2 * 24 * 60 * 60 * 1000;
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function parseRefreshedAt(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Formats using the UTC calendar date rather than the viewer's local time --
+// refreshed_at is day-precision, so converting to local time near a midnight
+// boundary could otherwise shift the displayed date by a day.
+function formatRefreshedDate(iso) {
+  const d = parseRefreshedAt(iso);
+  if (!d) return null;
+  return `${d.getUTCDate()} ${MONTH_ABBR[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
 export default function Dashboard({ agent, token, setPage }) {
   const [listings, setListings] = useState([]);
   const [pulse, setPulse] = useState(null);
@@ -60,6 +82,10 @@ export default function Dashboard({ agent, token, setPage }) {
     }
   };
 
+  const refreshedDate = parseRefreshedAt(pulse?.refreshed_at);
+  const isFreshUra = pulse?.source === 'ura_api' && refreshedDate !== null
+    && (Date.now() - refreshedDate.getTime()) <= REFRESH_FRESH_MS;
+
   const pulseFields = pulse ? [
     ['GCB Transactions', pulse.gcb_transactions, 'gcb_transactions'],
     ['Total GCB Value', pulse.gcb_total_value, 'gcb_total_value'],
@@ -114,7 +140,13 @@ export default function Dashboard({ agent, token, setPage }) {
             <span style={{display:'flex', alignItems:'center', gap:'8px'}}>
               Singapore Market Pulse
               {pulse?.source === 'ura_api' ? (
-                <span style={{fontSize:'10px', color:'#4CAF50', border:'1px solid rgba(76,175,80,0.4)', borderRadius:'3px', padding:'2px 6px', letterSpacing:'0.03em'}}>LIVE · URA</span>
+                isFreshUra ? (
+                  <span style={{fontSize:'10px', color:'#4CAF50', border:'1px solid rgba(76,175,80,0.4)', borderRadius:'3px', padding:'2px 6px', letterSpacing:'0.03em'}}>LIVE · URA</span>
+                ) : (
+                  <span style={{fontSize:'10px', color:'#e0a83e', border:'1px solid rgba(224,168,62,0.4)', borderRadius:'3px', padding:'2px 6px', letterSpacing:'0.03em'}}>
+                    URA · {refreshedDate ? `as of ${formatRefreshedDate(pulse.refreshed_at)}` : 'freshness unknown'}
+                  </span>
+                )
               ) : (
                 <span style={{fontSize:'10px', color:'rgba(248,244,236,0.4)', border:'1px solid rgba(248,244,236,0.2)', borderRadius:'3px', padding:'2px 6px', letterSpacing:'0.03em'}}>MANUAL</span>
               )}
@@ -189,7 +221,7 @@ export default function Dashboard({ agent, token, setPage }) {
             ℹ <strong style={{color:'rgba(212,175,55,0.8)'}}>Disclaimer:</strong> GCB figures are computed from URA's Private Residential Property Transactions data service, filtered to Detached-house transactions within URA's 39 gazetted Good Class Bungalow Areas over the trailing 12 months. Figures are indicative. NestList does not warrant the accuracy of market data. Always verify with URA or a licensed professional before making property decisions.
           </div>
           <div className="market-source">
-            Source: URA Data Service API &nbsp;|&nbsp; Last updated: {pulse?.last_updated || 'Jan 2026'}
+            Source: URA Data Service API &nbsp;|&nbsp; Last refreshed: {refreshedDate ? formatRefreshedDate(pulse.refreshed_at) : 'unknown'}
           </div>
         </div>
       </div>
