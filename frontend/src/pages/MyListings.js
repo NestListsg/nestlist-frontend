@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { formatPriceM, sanitizeLocation, maskPrice } from '../utils/format';
+import { formatPriceM, maskPrice } from '../utils/format';
 import MatchingBuyers from '../components/MatchingBuyers';
 
 const API = process.env.REACT_APP_API_URL || '';
@@ -66,7 +66,7 @@ function buildLinkedInInsightCaption(listing, agent, marketPulse) {
 
   const propertyContext = [
     listing.property_type ? listing.property_type.toLowerCase() : 'property',
-    listing.location ? `in ${sanitizeLocation(listing.location)}` : '',
+    listing.district_label ? `in ${listing.district_label}` : '',
   ].filter(Boolean).join(' ');
 
   const signOff = [agent?.name, agent?.contact, agent?.agency].filter(Boolean).join('\n');
@@ -93,13 +93,13 @@ function buildListingUrl(listing) {
 function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) {
   if (platform === 'linkedin') return buildLinkedInInsightCaption(listing, agent, marketPulse);
 
-  // House/unit numbers never appear in generated copy shown to buyers, on
-  // any platform -- see displayLocation below. Exact price is a different
-  // rule per platform: PropertyGuru is an actual portal listing field (not
-  // a caption) and keeps the real price, while the FB/IG/WhatsApp/TikTok
-  // teaser captions below use maskedPrice (the "$X.XXM" convention) at most
-  // once each, per the caption copy rules.
-  const displayLocation = sanitizeLocation(listing.location);
+  // The raw street never appears in generated copy shown to buyers, on any
+  // platform -- captions below use only the district ("hide the road").
+  // Exact price is a different rule per platform: PropertyGuru is an actual
+  // portal listing field (not a caption) and keeps the real price, while the
+  // FB/IG/WhatsApp/TikTok teaser captions below use maskedPrice (the
+  // "$X.XXM" convention) at most once each, per the caption copy rules.
+  const displayLocation = listing.district_label || '';
   const maskedPrice = maskPrice(listing.price);
 
   const listingUrl = buildListingUrl(listing);
@@ -586,7 +586,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     }
     try {
       await navigator.share({
-        title: `${listing.property_type} | ${sanitizeLocation(listing.location)}`,
+        title: listing.district_label ? `${listing.property_type} | ${listing.district_label}` : listing.property_type,
         text: caption,
         url: `https://${buildListingUrl(listing)}`
       });
@@ -1330,7 +1330,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
               <MatchingBuyers
                 token={token}
                 listingId={l.id}
-                listingSummary={`${l.property_type} in ${l.location}, SGD ${formatPriceM(l.price)}`}
+                listingSummary={`${l.property_type}${l.district_label ? ` in ${l.district_label}` : ''}, SGD ${formatPriceM(l.price)}`}
               />
 
               <div style={{

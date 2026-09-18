@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { formatPriceM, sanitizeLocation } from '../utils/format';
+import { formatPriceM } from '../utils/format';
 
 const API = process.env.REACT_APP_API_URL || '';
 const LOGO = '/logo_2.png';
@@ -112,7 +112,12 @@ export default function PublicListing() {
       )}
 
       <div className="section-label">{listing.property_type}</div>
-      <div className="page-title" style={{ marginBottom: '4px' }}>{sanitizeLocation(listing.location)}</div>
+      {/* Buyer-facing: only the district may show here, never the street --
+          "hide the road". If this listing predates district_label, show
+          nothing rather than falling back to the raw location/street. */}
+      {listing.district_label && (
+        <div className="page-title" style={{ marginBottom: '4px' }}>{listing.district_label}</div>
+      )}
       <div style={{ fontSize: '20px', color: 'var(--gold-light)', marginBottom: '20px', fontFamily: "'Cormorant Garamond', serif" }}>
         SGD {formatPriceM(listing.price)}
       </div>
