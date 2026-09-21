@@ -317,6 +317,12 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const [posterLoading, setPosterLoading] = useState({});
   const [videoLoading, setVideoLoading] = useState({});
   const [videoError, setVideoError] = useState({});
+  // Informational (non-error) status line shown while a video job is queued or
+  // rendering -- e.g. "3rd in line, about 2 minutes". Kept separate from videoError
+  // so a healthy queue never reads as a fault. Empty/undefined means "no queue info
+  // to show", which is also exactly today's behaviour for a listing whose backend
+  // doesn't yet report queue position (see handleGenerateVideo).
+  const [videoQueueMsg, setVideoQueueMsg] = useState({});
   // listingId -> 'classic' | 'signature'. Only meaningful for listings that have a
   // signature_video_url (currently just the demo listing) -- default to 'signature'
   // so the premium clip plays first. Everything else ignores this entirely.
@@ -619,16 +625,42 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     }
   };
 
+  // Turns a queue position + ETA into the one-line status an agent sees while they
+  // wait: "3rd in line, about 2 minutes" for a queued job, "Rendering now" for one
+  // actually being worked. queuePosition === 0 means "currently rendering" (the
+  // backend's convention -- see video_jobs.describe on the backend); any positive
+  // number is "that many, counting itself, from the front"; null/undefined means
+  // no queue info is available at all, and callers must treat that as "say nothing".
+  //
+  // Only one job type renders today (Classic). A future Signature job would need
+  // its own line rather than sharing this one by listing id alone -- see the note
+  // in handleGenerateVideo where this is called.
+  const describeVideoQueue = (queuePosition, etaSeconds) => {
+    if (queuePosition === null || queuePosition === undefined) return null;
+    const mins = (typeof etaSeconds === 'number' && !isNaN(etaSeconds)) ? Math.round(etaSeconds / 60) : null;
+    const eta = mins === null ? null : mins <= 0 ? 'under a minute' : mins === 1 ? 'about a minute' : `about ${mins} minutes`;
+    if (queuePosition <= 0) {
+      return eta ? `Rendering now -- ${eta} left` : 'Rendering now...';
+    }
+    const suffixes = ['th', 'st', 'nd', 'rd'];
+    const v = queuePosition % 100;
+    const ordinal = queuePosition + (suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0]);
+    return eta ? `${ordinal} in line, ${eta}` : `${ordinal} in line`;
+  };
+
   // Video generation is asynchronous on the backend: the request returns
   // immediately with {status: 'rendering'} and the render happens in a
-  // background worker. This function then polls the listing until its
-  // video_status becomes 'done' or 'failed'. That indirection exists because
+  // background worker (now a durable queue -- a render can legitimately sit
+  // waiting for a slot for several minutes under load, which is expected
+  // behaviour, not a stall). This function polls until video_status becomes
+  // 'done' or 'failed'. Polling (rather than one long request) exists because
   // renders run 40-70s+, and Safari kills any single HTTP request around the
   // 60s mark -- agents on Safari were getting an unexplained network error
   // right as their video was about to finish.
   const handleGenerateVideo = async (listing) => {
     setVideoLoading(v => ({ ...v, [listing.id]: true }));
     setVideoError(e => ({ ...e, [listing.id]: '' }));
+    setVideoQueueMsg(m => ({ ...m, [listing.id]: '' }));
     try {
       const videoTemplateId = selectedVideoTemplateFor(listing);
       const photoIndex = getFeaturedIndex(listing);
@@ -645,31 +677,82 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         return;
       }
 
-      // Poll every 5s, up to 5 minutes.
-      const POLL_MS = 5000;
-      const MAX_POLLS = 60;
-      for (let i = 0; i < MAX_POLLS; i++) {
-        await new Promise(r => setTimeout(r, POLL_MS));
+      // The enqueue response may already carry a queue position/ETA (unprefixed
+      // field names, since this is the POST response, not a listing row) -- show
+      // it immediately instead of waiting for the first poll tick.
+      setVideoQueueMsg(m => ({
+        ...m,
+        [listing.id]: describeVideoQueue(
+          data.video_queue_position ?? data.queue_position ?? null,
+          data.video_eta_seconds ?? data.eta_seconds ?? null
+        )
+      }));
+
+      // Poll for status. A dedicated, lighter endpoint exists for this; fall back
+      // to the full listings list (today's original behaviour) if that endpoint
+      // isn't live yet on the backend -- this frontend may ship before it does.
+      let useDedicatedStatus = true;
+      const pollStartedAt = Date.now();
+      // A queue wait of a few minutes is normal now, so we no longer give up at 5
+      // minutes with an alarming "taking longer than expected" message -- that used
+      // to be true, it isn't anymore, and telling a waiting agent something is wrong
+      // when it isn't is exactly the damage the queue exists to prevent. This
+      // backstop is only for a job that is genuinely stuck; it's generous, and it
+      // reads as "still working", never as a fault.
+      const BACKSTOP_MS = 45 * 60 * 1000;
+      while (Date.now() - pollStartedAt < BACKSTOP_MS) {
+        // Ease off the poll rate for long waits rather than hammering every 5s.
+        const elapsed = Date.now() - pollStartedAt;
+        const delay = elapsed < 2 * 60 * 1000 ? 5000 : elapsed < 10 * 60 * 1000 ? 15000 : 30000;
+        await new Promise(r => setTimeout(r, delay));
+
         let updated = null;
         try {
-          const pollRes = await fetch(`${API}/api/listings?status=all`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          const all = await pollRes.json();
-          updated = Array.isArray(all) ? all.find(l => l.id === listing.id) : null;
+          if (useDedicatedStatus) {
+            const pollRes = await fetch(`${API}/api/listings/${listing.id}/video-status`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (pollRes.status === 404) {
+              // Endpoint not deployed yet -- fall back for the rest of this poll.
+              useDedicatedStatus = false;
+            } else if (pollRes.ok) {
+              updated = await pollRes.json();
+            }
+          }
+          if (!useDedicatedStatus) {
+            const pollRes = await fetch(`${API}/api/listings?status=all`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            const all = await pollRes.json();
+            updated = Array.isArray(all) ? all.find(l => l.id === listing.id) : null;
+          }
         } catch {
           continue; // transient poll failure -- keep waiting, the render is server-side
         }
         if (!updated) continue;
+
         if (updated.video_status === 'done' && updated.video_url) {
           setListings(prev => prev.map(l => l.id === listing.id ? { ...l, video_url: updated.video_url, video_template_id: updated.video_template_id, video_status: 'done' } : l));
+          setVideoQueueMsg(m => ({ ...m, [listing.id]: '' }));
           return;
         }
         if (updated.video_status === 'failed') {
+          setVideoQueueMsg(m => ({ ...m, [listing.id]: '' }));
           throw new Error(updated.video_error || 'Video generation failed. Please try again.');
         }
+
+        // Still queued or rendering. video_queue_position/video_eta_seconds are
+        // both nullable -- an older listing, a job not yet picked up, or a backend
+        // that hasn't shipped the queue at all will report null for both, and
+        // describeVideoQueue returns null for that, which clears this line back to
+        // exactly today's behaviour (just the button's own loading label).
+        const queuePos = updated.video_queue_position ?? updated.queue_position ?? null;
+        const etaSecs = updated.video_eta_seconds ?? updated.eta_seconds ?? null;
+        setVideoQueueMsg(m => ({ ...m, [listing.id]: describeVideoQueue(queuePos, etaSecs) }));
       }
-      throw new Error("This video is taking longer than expected. It may still finish -- check back in a few minutes before retrying.");
+
+      // Backstop reached. This is unusual, but -- deliberately -- not an error.
+      setVideoQueueMsg(m => ({ ...m, [listing.id]: "Still working on this one -- it may just be an unusually busy queue. Check back shortly." }));
     } catch (err) {
       setVideoError(e => ({ ...e, [listing.id]: err.message }));
     } finally {
@@ -1550,7 +1633,9 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       onClick={() => handleGenerateVideo(l)}
                       disabled={videoLoading[l.id]}
                     >
-                      {videoLoading[l.id] ? 'Generating video... (~1-2 min)' : l.video_url ? '🎬 Regenerate Video' : '🎬 Generate Video'}
+                      {videoLoading[l.id]
+                        ? (videoQueueMsg[l.id] ? 'Generating video...' : 'Generating video... (~1-2 min)')
+                        : l.video_url ? '🎬 Regenerate Video' : '🎬 Generate Video'}
                     </button>
                     {l.video_url && (
                       <button
@@ -1574,6 +1659,9 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       </button>
                     )}
                   </div>
+                  {!videoError[l.id] && videoQueueMsg[l.id] && (
+                    <div style={{ color: 'rgba(248,244,236,0.65)', fontSize: '12px', marginTop: '8px' }}>{videoQueueMsg[l.id]}</div>
+                  )}
                   {videoError[l.id] && (
                     <div style={{ color: '#e08080', fontSize: '12px', marginTop: '8px' }}>{videoError[l.id]}</div>
                   )}
