@@ -672,7 +672,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     try {
       const res = await fetch(`${API}/api/listings/${l.id}/captions`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ captions: edits }),
       });
       const data = await res.json();
@@ -1719,6 +1719,8 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                               <> Blank ones haven't been recorded yet — they'll fill in the next time you
                               generate this video, or you can write your own now.</>
                             )}
+                            <> Lines you write are kept when you regenerate. Lines you leave alone are
+                            rewritten each time, so they pick up any improvements.</>
                           </div>
                           {(() => {
                             const stored = l.video_captions || {};
@@ -1727,8 +1729,13 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                             // Same order the renderer uses: hero first, then the rest, capped at six.
                             const used = [imgs[hero], ...imgs.filter((_, i) => i !== hero)]
                               .filter(Boolean).slice(0, 6);
-                            return used.map((url) => [url, stored[url] || '']);
-                          })().map(([url, original]) => {
+                            return used.map((url) => {
+                              const v = stored[url];
+                              const text = typeof v === 'string' ? v : (v && v.text) || '';
+                              const mine = !!(v && typeof v === 'object' && v.edited);
+                              return [url, text, mine];
+                            });
+                          })().map(([url, original, mine]) => {
                             const edited = (captionEdits[l.id] || {})[url];
                             const value = edited === undefined ? original : edited;
                             const reject = (captionRejected[l.id] || {})[url];
@@ -1755,9 +1762,11 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                                       fontSize: '12px', fontFamily: "'Montserrat', sans-serif"
                                     }}
                                   />
-                                  {reject && (
+                                  {reject ? (
                                     <div style={{ color: 'rgba(220,140,130,0.9)', fontSize: '11px', marginTop: '4px' }}>{reject}</div>
-                                  )}
+                                  ) : mine ? (
+                                    <div style={{ color: 'rgba(240,200,74,0.75)', fontSize: '11px', marginTop: '4px' }}>your wording — kept when you regenerate</div>
+                                  ) : null}
                                 </div>
                               </div>
                             );
