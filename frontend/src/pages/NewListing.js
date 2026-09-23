@@ -109,11 +109,20 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const [photoStageSuccess, setPhotoStageSuccess] = useState('');
   const [photoStageError, setPhotoStageError] = useState('');
   const [stagedPhotoUrls, setStagedPhotoUrls] = useState([]);
+  // Smart Fill sometimes guesses the wrong district (confirmed case: filled
+  // "District 10" for a Tembeling Road property, which is District 15, when
+  // the screenshots never even showed a district) -- these track whether the
+  // current district value came from Smart Fill and hasn't been looked at
+  // yet, so a wrong guess can never silently ride into the write-up.
+  const [districtAutofilled, setDistrictAutofilled] = useState(false);
+  const [districtConfirmed, setDistrictConfirmed] = useState(false);
+  const [districtGateOpen, setDistrictGateOpen] = useState(false);
   const fileRef = useRef();
   const photoRef = useRef();
   const folderRef = useRef();
   const stagePhotoRef = useRef();
   const stageFolderRef = useRef();
+  const districtSelectRef = useRef();
 
   // Persist form to localStorage whenever it changes (skip while editing an existing listing)
   useEffect(() => {
@@ -156,6 +165,9 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     setStagedPhotoUrls([]);
     setPhotoStageSuccess('');
     setPhotoStageError('');
+    setDistrictAutofilled(false);
+    setDistrictConfirmed(false);
+    setDistrictGateOpen(false);
     if (fileRef.current) fileRef.current.value = '';
     if (photoRef.current) photoRef.current.value = '';
     if (stagePhotoRef.current) stagePhotoRef.current.value = '';
@@ -316,10 +328,16 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       // never overwrite an existing/blank selection with an empty value.
       // We never guess the district ourselves (e.g. from the street); it's
       // either read here from what the backend detected, or picked by hand.
+      // Smart Fill's district guess isn't always right, so mark it as an
+      // unconfirmed auto-fill -- the warning banner and the generate-time
+      // gate both key off this pair of flags.
       if (extracted.district === undefined || extracted.district === null || extracted.district === '') {
         delete extracted.district;
       } else {
         extracted.district = String(extracted.district);
+        setDistrictAutofilled(true);
+        setDistrictConfirmed(false);
+        setDistrictGateOpen(false);
       }
       setForm(f => ({ ...f, ...extracted }));
       setImageSuccess(`Details extracted from ${files.length} image${files.length > 1 ? 's' : ''}! Please review and adjust if needed.`);
@@ -534,7 +552,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.property_type) {
       setPropertyTypeInvalid(true);
@@ -542,7 +560,39 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       return;
     }
     if (!declaration) { setError('Please tick the declaration box.'); return; }
+    // Gently stop rather than silently sending a possibly-wrong Smart Fill
+    // district guess into the write-up. Only ever fires for the auto-filled,
+    // not-yet-looked-at case -- an agent-picked district needs zero friction.
+    if (!isEditing && districtAutofilled && !districtConfirmed) {
+      setPropertyTypeInvalid(false);
+      setError('');
+      setDistrictGateOpen(true);
+      return;
+    }
     setPropertyTypeInvalid(false);
+    setDistrictGateOpen(false);
+    doSubmit();
+  };
+
+  // The gate's own "quick nod" resolution -- one click both confirms the
+  // auto-filled district and continues straight into the generation that
+  // was already requested, so confirming never costs a second trip through
+  // the Generate button.
+  const confirmDistrictAndGenerate = () => {
+    setDistrictConfirmed(true);
+    setDistrictGateOpen(false);
+    doSubmit();
+  };
+
+  const jumpToDistrictField = () => {
+    setDistrictGateOpen(false);
+    if (districtSelectRef.current) {
+      districtSelectRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      districtSelectRef.current.focus();
+    }
+  };
+
+  const doSubmit = async () => {
     setError(''); setLoading(true); setResult(null); setSaveSuccess('');
     const payload = { ...form, price: millionsToFullNumber(form.price) };
     try {
@@ -708,13 +758,47 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
             </div>
             <div className="form-group">
               <label className="form-label">2b. District (optional)</label>
-              <select className="form-select" value={form.district} onChange={e => set('district', e.target.value)}>
+              <select
+                ref={districtSelectRef}
+                className="form-select"
+                value={form.district}
+                onChange={e => {
+                  set('district', e.target.value);
+                  // Picking a value by hand -- whether different from the
+                  // autofill or back to it -- is the agent looking at it and
+                  // deciding, so it always counts as confirmed.
+                  setDistrictConfirmed(true);
+                  setDistrictGateOpen(false);
+                }}
+              >
                 <option value="">-- Select District (optional) --</option>
                 {SG_DISTRICTS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
               </select>
-              <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
-                Used in your write-up. Smart Fill will pre-select this if your screenshots state it — otherwise pick it yourself.
-              </div>
+              {districtAutofilled && !districtConfirmed ? (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px',
+                  fontSize: '12px', color: 'rgba(248,244,236,0.85)', marginTop: '8px',
+                  background: 'rgba(255,165,0,0.08)', border: '1px solid rgba(255,165,0,0.35)',
+                  borderRadius: '3px', padding: '8px 12px'
+                }}>
+                  <span>⚠️ Auto-filled from your screenshots — please confirm this is correct.</span>
+                  <button
+                    type="button"
+                    onClick={() => { setDistrictConfirmed(true); setDistrictGateOpen(false); }}
+                    style={{
+                      background: 'transparent', border: '1px solid rgba(255,165,0,0.5)', color: '#F0C84A',
+                      padding: '3px 10px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px',
+                      fontFamily: "'Montserrat', sans-serif", whiteSpace: 'nowrap'
+                    }}
+                  >
+                    ✓ Correct
+                  </button>
+                </div>
+              ) : (
+                <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
+                  Used in your write-up. Smart Fill will pre-select this if your screenshots state it — otherwise pick it yourself.
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">3. Land Size (sqft)</label>
@@ -858,6 +942,39 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
 
         {error && <div className="error-msg">{error}</div>}
         {saveSuccess && <div className="success-msg">{saveSuccess}</div>}
+
+        {districtGateOpen && (
+          <div style={{
+            background: 'rgba(255,165,0,0.08)', border: '1px solid rgba(255,165,0,0.35)',
+            borderRadius: '4px', padding: '14px 16px', marginTop: '12px'
+          }}>
+            <div style={{ fontSize: '13px', color: 'rgba(248,244,236,0.9)', marginBottom: '10px' }}>
+              ⚠️ We auto-filled the District as "{(SG_DISTRICTS.find(d => d.value === form.district) || {}).label || `District ${form.district}`}" — please confirm it's correct before generating.
+            </div>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                type="button" onClick={confirmDistrictAndGenerate}
+                style={{
+                  background: 'rgba(212,175,55,0.2)', border: '1px solid rgba(212,175,55,0.5)',
+                  color: '#F0C84A', padding: '7px 16px', borderRadius: '3px', cursor: 'pointer',
+                  fontSize: '13px', fontFamily: "'Montserrat', sans-serif"
+                }}
+              >
+                ✓ Yes, that's correct — Generate
+              </button>
+              <button
+                type="button" onClick={jumpToDistrictField}
+                style={{
+                  background: 'transparent', border: '1px solid rgba(248,244,236,0.25)',
+                  color: 'rgba(248,244,236,0.7)', padding: '7px 16px', borderRadius: '3px', cursor: 'pointer',
+                  fontSize: '13px', fontFamily: "'Montserrat', sans-serif"
+                }}
+              >
+                Change District
+              </button>
+            </div>
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
           <button
