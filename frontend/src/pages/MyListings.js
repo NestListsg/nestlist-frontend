@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { formatPriceM, maskPrice } from '../utils/format';
+import { formatPriceM, formatPriceDisplay, maskPrice } from '../utils/format';
 import MatchingBuyers from '../components/MatchingBuyers';
 
 const API = process.env.REACT_APP_API_URL || '';
@@ -1131,7 +1131,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
             const next = expanded === l.id ? null : l.id;
             updateExpanded(next);
           }}>
-            <div className="listing-card-title">{l.property_type} — {l.location} — SGD {formatPriceM(l.price)}</div>
+            <div className="listing-card-title">{l.property_type} — {l.location} — {formatPriceDisplay(l.price) ? `SGD ${formatPriceDisplay(l.price)}` : 'Price on request'}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(l); }}
@@ -1926,7 +1926,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
             const next = expanded === l.id ? null : l.id;
             updateExpanded(next);
           }}>
-            <div className="listing-card-title">{l.property_type} — {l.location} — SGD {formatPriceM(l.price)}</div>
+            <div className="listing-card-title">{l.property_type} — {l.location} — {formatPriceDisplay(l.price) ? `SGD ${formatPriceDisplay(l.price)}` : 'Price on request'}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <button
                 onClick={(e) => { e.stopPropagation(); handleRestore(l.id); }}

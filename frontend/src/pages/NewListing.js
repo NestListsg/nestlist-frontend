@@ -117,12 +117,19 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const [districtAutofilled, setDistrictAutofilled] = useState(false);
   const [districtConfirmed, setDistrictConfirmed] = useState(false);
   const [districtGateOpen, setDistrictGateOpen] = useState(false);
+  // Price is optional and gets the same auto-fill safety net as District:
+  // Smart Fill's guess must be looked at once before it can flow into
+  // generation, but typing/editing it by hand always counts as confirming.
+  const [priceAutofilled, setPriceAutofilled] = useState(false);
+  const [priceConfirmed, setPriceConfirmed] = useState(false);
+  const [priceGateOpen, setPriceGateOpen] = useState(false);
   const fileRef = useRef();
   const photoRef = useRef();
   const folderRef = useRef();
   const stagePhotoRef = useRef();
   const stageFolderRef = useRef();
   const districtSelectRef = useRef();
+  const priceInputRef = useRef();
 
   // Persist form to localStorage whenever it changes (skip while editing an existing listing)
   useEffect(() => {
@@ -168,6 +175,9 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     setDistrictAutofilled(false);
     setDistrictConfirmed(false);
     setDistrictGateOpen(false);
+    setPriceAutofilled(false);
+    setPriceConfirmed(false);
+    setPriceGateOpen(false);
     if (fileRef.current) fileRef.current.value = '';
     if (photoRef.current) photoRef.current.value = '';
     if (stagePhotoRef.current) stagePhotoRef.current.value = '';
@@ -323,7 +333,12 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       clearTimeout(timeout);
       const extracted = await response.json();
       if (!response.ok) throw new Error(extracted.detail || 'Failed to read image');
-      if (extracted.price) extracted.price = fullNumberToMillions(extracted.price);
+      if (extracted.price) {
+        extracted.price = fullNumberToMillions(extracted.price);
+        setPriceAutofilled(true);
+        setPriceConfirmed(false);
+        setPriceGateOpen(false);
+      }
       // Pre-select district only when Smart Fill actually detected one --
       // never overwrite an existing/blank selection with an empty value.
       // We never guess the district ourselves (e.g. from the street); it's
@@ -561,26 +576,43 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     }
     if (!declaration) { setError('Please tick the declaration box.'); return; }
     // Gently stop rather than silently sending a possibly-wrong Smart Fill
-    // district guess into the write-up. Only ever fires for the auto-filled,
-    // not-yet-looked-at case -- an agent-picked district needs zero friction.
-    if (!isEditing && districtAutofilled && !districtConfirmed) {
+    // guess (district or price) into the write-up. Only ever fires for the
+    // auto-filled, not-yet-looked-at case -- fields the agent picked/typed
+    // themselves need zero friction. Both checked together (not an early
+    // return per field) so if both are pending the agent sees both at once
+    // instead of clearing one, clicking Generate again, then hitting the other.
+    const districtNeedsConfirm = !isEditing && districtAutofilled && !districtConfirmed;
+    const priceNeedsConfirm = !isEditing && priceAutofilled && !priceConfirmed;
+    if (districtNeedsConfirm || priceNeedsConfirm) {
       setPropertyTypeInvalid(false);
       setError('');
-      setDistrictGateOpen(true);
+      setDistrictGateOpen(districtNeedsConfirm);
+      setPriceGateOpen(priceNeedsConfirm);
       return;
     }
     setPropertyTypeInvalid(false);
     setDistrictGateOpen(false);
+    setPriceGateOpen(false);
     doSubmit();
   };
 
-  // The gate's own "quick nod" resolution -- one click both confirms the
-  // auto-filled district and continues straight into the generation that
-  // was already requested, so confirming never costs a second trip through
-  // the Generate button.
-  const confirmDistrictAndGenerate = () => {
+  // Each gate's own "quick nod" resolution -- confirms that one field and,
+  // if the other gate isn't also still open, continues straight into the
+  // generation that was already requested (so confirming never costs a
+  // second trip through the Generate button when only one field was
+  // pending). If the other field is still unconfirmed, its box stays open
+  // instead of submitting early.
+  const confirmDistrictAndMaybeGenerate = () => {
     setDistrictConfirmed(true);
     setDistrictGateOpen(false);
+    if (priceAutofilled && !priceConfirmed) { setPriceGateOpen(true); return; }
+    doSubmit();
+  };
+
+  const confirmPriceAndMaybeGenerate = () => {
+    setPriceConfirmed(true);
+    setPriceGateOpen(false);
+    if (districtAutofilled && !districtConfirmed) { setDistrictGateOpen(true); return; }
     doSubmit();
   };
 
@@ -589,6 +621,14 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     if (districtSelectRef.current) {
       districtSelectRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       districtSelectRef.current.focus();
+    }
+  };
+
+  const jumpToPriceField = () => {
+    setPriceGateOpen(false);
+    if (priceInputRef.current) {
+      priceInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      priceInputRef.current.focus();
     }
   };
 
@@ -827,8 +867,42 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
               <input className="form-input" value={form.bathrooms} onChange={e => set('bathrooms', e.target.value)} placeholder="e.g. 4" />
             </div>
             <div className="form-group">
-              <label className="form-label">8. Asking Price (SGD, in Millions)</label>
-              <input className="form-input" value={form.price} onChange={e => set('price', e.target.value)} placeholder="e.g. 25.7" required />
+              <label className="form-label">8. Asking Price (SGD, in Millions) (optional)</label>
+              <input
+                ref={priceInputRef}
+                className="form-input"
+                value={form.price}
+                onChange={e => {
+                  set('price', e.target.value);
+                  // Typing/editing by hand -- even clearing it back to blank
+                  // -- is the agent looking at it and deciding, so it always
+                  // counts as confirmed.
+                  setPriceConfirmed(true);
+                  setPriceGateOpen(false);
+                }}
+                placeholder="e.g. 25.7 (leave blank if not set yet)"
+              />
+              {priceAutofilled && !priceConfirmed && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px',
+                  fontSize: '12px', color: 'rgba(248,244,236,0.85)', marginTop: '8px',
+                  background: 'rgba(255,165,0,0.08)', border: '1px solid rgba(255,165,0,0.35)',
+                  borderRadius: '3px', padding: '8px 12px'
+                }}>
+                  <span>⚠️ Auto-filled from your screenshots — please confirm this price.</span>
+                  <button
+                    type="button"
+                    onClick={() => { setPriceConfirmed(true); setPriceGateOpen(false); }}
+                    style={{
+                      background: 'transparent', border: '1px solid rgba(255,165,0,0.5)', color: '#F0C84A',
+                      padding: '3px 10px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px',
+                      fontFamily: "'Montserrat', sans-serif", whiteSpace: 'nowrap'
+                    }}
+                  >
+                    ✓ Correct
+                  </button>
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">9. Number of Storeys</label>
@@ -953,7 +1027,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
             </div>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <button
-                type="button" onClick={confirmDistrictAndGenerate}
+                type="button" onClick={confirmDistrictAndMaybeGenerate}
                 style={{
                   background: 'rgba(212,175,55,0.2)', border: '1px solid rgba(212,175,55,0.5)',
                   color: '#F0C84A', padding: '7px 16px', borderRadius: '3px', cursor: 'pointer',
@@ -971,6 +1045,39 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
                 }}
               >
                 Change District
+              </button>
+            </div>
+          </div>
+        )}
+
+        {priceGateOpen && (
+          <div style={{
+            background: 'rgba(255,165,0,0.08)', border: '1px solid rgba(255,165,0,0.35)',
+            borderRadius: '4px', padding: '14px 16px', marginTop: '12px'
+          }}>
+            <div style={{ fontSize: '13px', color: 'rgba(248,244,236,0.9)', marginBottom: '10px' }}>
+              ⚠️ We auto-filled the Price as "SGD {form.price}M" — please confirm it's correct before generating.
+            </div>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                type="button" onClick={confirmPriceAndMaybeGenerate}
+                style={{
+                  background: 'rgba(212,175,55,0.2)', border: '1px solid rgba(212,175,55,0.5)',
+                  color: '#F0C84A', padding: '7px 16px', borderRadius: '3px', cursor: 'pointer',
+                  fontSize: '13px', fontFamily: "'Montserrat', sans-serif"
+                }}
+              >
+                ✓ Yes, that's correct — Generate
+              </button>
+              <button
+                type="button" onClick={jumpToPriceField}
+                style={{
+                  background: 'transparent', border: '1px solid rgba(248,244,236,0.25)',
+                  color: 'rgba(248,244,236,0.7)', padding: '7px 16px', borderRadius: '3px', cursor: 'pointer',
+                  fontSize: '13px', fontFamily: "'Montserrat', sans-serif"
+                }}
+              >
+                Change Price
               </button>
             </div>
           </div>

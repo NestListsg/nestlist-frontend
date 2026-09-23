@@ -9,6 +9,19 @@ export function formatPriceM(price) {
   return `${millions}M`;
 }
 
+// Returns null when there's no usable price (blank, zero, or unparseable)
+// so a display call site can show a clean "Price on request" instead of a
+// glitchy "SGD NaN" / "SGD " artifact -- price is now an optional field.
+// Distinct from formatPriceM itself, which several existing callers
+// (captions, maskPrice) still call directly and rely on getting the input
+// back unchanged when there's nothing to format.
+export function formatPriceDisplay(price) {
+  if (price === null || price === undefined || price === '') return null;
+  const num = parseFloat(String(price).replace(/,/g, ''));
+  if (isNaN(num) || num <= 0) return null;
+  return formatPriceM(price);
+}
+
 // Price input fields are entered/displayed in millions (e.g. "25.7") but
 // stored and used everywhere else as the full raw number, so values convert
 // at the two boundaries: loading a stored value into a form, and submitting

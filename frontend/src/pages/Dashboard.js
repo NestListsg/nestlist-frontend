@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { formatPriceM } from '../utils/format';
+import { formatPriceDisplay } from '../utils/format';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -109,7 +109,7 @@ export default function Dashboard({ agent, token, setPage }) {
           <div className="panel-title">Recent Listings</div>
           {listings.length > 0 ? listings.slice(0, 3).map(l => (
             <div key={l.id} className="listing-item" onClick={() => setPage('My Listings')}>
-              {l.location} — SGD {formatPriceM(l.price)}
+              {l.location} — {formatPriceDisplay(l.price) ? `SGD ${formatPriceDisplay(l.price)}` : 'Price on request'}
             </div>
           )) : (
             <p style={{color:'rgba(248,244,236,0.4)', fontSize:'13px', fontStyle:'italic'}}>
