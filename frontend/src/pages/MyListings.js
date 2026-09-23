@@ -1695,7 +1695,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       </button>
                     )}
                   </div>
-                  {l.video_url && l.video_captions && Object.keys(l.video_captions).length > 0 && (
+                  {l.video_url && (
                     <div style={{ marginTop: '14px' }}>
                       <button
                         type="button"
@@ -1715,8 +1715,20 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                             These lines are written automatically from your photos and appear on screen.
                             If one names a room that isn't in the picture, correct it here — you know the
                             property, the software only sees the photo.
+                            {(!l.video_captions || Object.keys(l.video_captions).length === 0) && (
+                              <> Blank ones haven't been recorded yet — they'll fill in the next time you
+                              generate this video, or you can write your own now.</>
+                            )}
                           </div>
-                          {Object.entries(l.video_captions).map(([url, original]) => {
+                          {(() => {
+                            const stored = l.video_captions || {};
+                            const imgs = l.images || [];
+                            const hero = getFeaturedIndex(l);
+                            // Same order the renderer uses: hero first, then the rest, capped at six.
+                            const used = [imgs[hero], ...imgs.filter((_, i) => i !== hero)]
+                              .filter(Boolean).slice(0, 6);
+                            return used.map((url) => [url, stored[url] || '']);
+                          })().map(([url, original]) => {
                             const edited = (captionEdits[l.id] || {})[url];
                             const value = edited === undefined ? original : edited;
                             const reject = (captionRejected[l.id] || {})[url];
@@ -1731,6 +1743,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                                     type="text"
                                     value={value}
                                     maxLength={70}
+                                    placeholder="written automatically"
                                     onChange={(e) => setCaptionEdits(prev => ({
                                       ...prev,
                                       [l.id]: { ...(prev[l.id] || {}), [url]: e.target.value },
