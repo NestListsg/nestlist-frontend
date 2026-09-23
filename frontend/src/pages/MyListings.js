@@ -323,6 +323,13 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   // to show", which is also exactly today's behaviour for a listing whose backend
   // doesn't yet report queue position (see handleGenerateVideo).
   const [videoQueueMsg, setVideoQueueMsg] = useState({});
+  // Captions the agent is editing, keyed listingId -> { photoUrl: text }. Held
+  // separately from `listings` so a half-typed caption is never mistaken for a saved one.
+  const [captionEdits, setCaptionEdits] = useState({});
+  const [captionOpen, setCaptionOpen] = useState({});
+  const [captionSaving, setCaptionSaving] = useState({});
+  const [captionNote, setCaptionNote] = useState({});
+  const [captionRejected, setCaptionRejected] = useState({});
   // listingId -> 'classic' | 'signature'. Only meaningful for listings that have a
   // signature_video_url (currently just the demo listing) -- default to 'signature'
   // so the premium clip plays first. Everything else ignores this entirely.
@@ -657,6 +664,35 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   // renders run 40-70s+, and Safari kills any single HTTP request around the
   // 60s mark -- agents on Safari were getting an unexplained network error
   // right as their video was about to finish.
+  const handleSaveCaptions = async (l) => {
+    const edits = captionEdits[l.id] || {};
+    setCaptionSaving(prev => ({ ...prev, [l.id]: true }));
+    setCaptionNote(prev => ({ ...prev, [l.id]: '' }));
+    setCaptionRejected(prev => ({ ...prev, [l.id]: {} }));
+    try {
+      const res = await fetch(`${API}/api/listings/${l.id}/captions`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify({ captions: edits }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Could not save');
+      setListings(prev => prev.map(x => x.id === l.id ? { ...x, video_captions: data.captions } : x));
+      setCaptionRejected(prev => ({ ...prev, [l.id]: data.rejected || {} }));
+      const bad = Object.keys(data.rejected || {}).length;
+      setCaptionNote(prev => ({
+        ...prev,
+        [l.id]: bad
+          ? `Saved the rest. ${bad} caption${bad > 1 ? 's' : ''} could not be used — see below.`
+          : 'Saved. Regenerate the video to see the change.',
+      }));
+    } catch (e) {
+      setCaptionNote(prev => ({ ...prev, [l.id]: e.message || 'Could not save' }));
+    } finally {
+      setCaptionSaving(prev => ({ ...prev, [l.id]: false }));
+    }
+  };
+
   const handleGenerateVideo = async (listing) => {
     setVideoLoading(v => ({ ...v, [listing.id]: true }));
     setVideoError(e => ({ ...e, [listing.id]: '' }));
@@ -1659,6 +1695,81 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       </button>
                     )}
                   </div>
+                  {l.video_url && l.video_captions && Object.keys(l.video_captions).length > 0 && (
+                    <div style={{ marginTop: '14px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setCaptionOpen(prev => ({ ...prev, [l.id]: !prev[l.id] }))}
+                        style={{
+                          background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+                          color: 'rgba(248,244,236,0.75)', fontSize: '12px',
+                          fontFamily: "'Montserrat', sans-serif", textDecoration: 'underline',
+                          textUnderlineOffset: '3px'
+                        }}
+                      >
+                        {captionOpen[l.id] ? 'Hide' : 'Check'} what this video says about the property
+                      </button>
+                      {captionOpen[l.id] && (
+                        <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          <div style={{ color: 'rgba(248,244,236,0.55)', fontSize: '11px', lineHeight: 1.5, maxWidth: '520px' }}>
+                            These lines are written automatically from your photos and appear on screen.
+                            If one names a room that isn't in the picture, correct it here — you know the
+                            property, the software only sees the photo.
+                          </div>
+                          {Object.entries(l.video_captions).map(([url, original]) => {
+                            const edited = (captionEdits[l.id] || {})[url];
+                            const value = edited === undefined ? original : edited;
+                            const reject = (captionRejected[l.id] || {})[url];
+                            return (
+                              <div key={url} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                                <img
+                                  src={url} alt=""
+                                  style={{ width: '56px', height: '42px', objectFit: 'cover', borderRadius: '2px', flex: '0 0 auto' }}
+                                />
+                                <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+                                  <input
+                                    type="text"
+                                    value={value}
+                                    maxLength={70}
+                                    onChange={(e) => setCaptionEdits(prev => ({
+                                      ...prev,
+                                      [l.id]: { ...(prev[l.id] || {}), [url]: e.target.value },
+                                    }))}
+                                    style={{
+                                      width: '100%', background: 'rgba(255,255,255,0.04)',
+                                      border: `1px solid ${reject ? 'rgba(220,120,110,0.65)' : 'rgba(212,175,55,0.25)'}`,
+                                      color: '#F8F4EC', padding: '8px 10px', borderRadius: '2px',
+                                      fontSize: '12px', fontFamily: "'Montserrat', sans-serif"
+                                    }}
+                                  />
+                                  {reject && (
+                                    <div style={{ color: 'rgba(220,140,130,0.9)', fontSize: '11px', marginTop: '4px' }}>{reject}</div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleSaveCaptions(l)}
+                              disabled={captionSaving[l.id]}
+                              style={{
+                                background: 'transparent', border: '1px solid rgba(212,175,55,0.4)',
+                                color: '#F0C84A', padding: '8px 14px', borderRadius: '3px',
+                                fontSize: '12px', fontFamily: "'Montserrat', sans-serif", cursor: 'pointer'
+                              }}
+                            >
+                              {captionSaving[l.id] ? 'Saving...' : 'Save captions'}
+                            </button>
+                            {captionNote[l.id] && (
+                              <span style={{ color: 'rgba(248,244,236,0.65)', fontSize: '11px' }}>{captionNote[l.id]}</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {!videoError[l.id] && videoQueueMsg[l.id] && (
                     <div style={{ color: 'rgba(248,244,236,0.65)', fontSize: '12px', marginTop: '8px' }}>{videoQueueMsg[l.id]}</div>
                   )}
