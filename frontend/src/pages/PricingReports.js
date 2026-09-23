@@ -42,6 +42,22 @@ function loadPersisted() {
   }
 }
 
+function parseReportDate(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// UTC-safe calendar-day count (same approach as the Market Pulse freshness
+// badge) so a report generated near midnight can't gain or lose a day
+// depending on the viewer's local timezone.
+function daysAgoUTC(date) {
+  const now = new Date();
+  const startUTC = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  const nowUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.round((nowUTC - startUTC) / (24 * 60 * 60 * 1000));
+}
+
 export default function PricingReports({ token }) {
   const persisted = loadPersisted();
   const [street, setStreet] = useState(persisted?.street || '');
@@ -64,6 +80,15 @@ export default function PricingReports({ token }) {
   const toggleColumn = (key) => {
     setVisibleColumns(v => ({ ...v, [key]: !v[key] }));
   };
+
+  // A saved report persists across browser restarts (see STORAGE_KEY above),
+  // so an agent can be looking at one that's weeks old without any signal
+  // that the comps are stale. reportDate/reportDaysAgo stay null (never a
+  // crash) when generated_at is missing or unparseable, in which case no
+  // reminder shows at all.
+  const reportDate = report ? parseReportDate(report.generated_at) : null;
+  const reportDaysAgo = reportDate ? daysAgoUTC(reportDate) : null;
+  const reportIsStale = reportDaysAgo !== null && reportDaysAgo > 14;
 
   const handleGenerate = async (e) => {
     e.preventDefault();
@@ -217,6 +242,15 @@ export default function PricingReports({ token }) {
               <div style={{ fontSize: '11px', color: 'rgba(248,244,236,0.35)', marginTop: '10px' }}>
                 Source: URA Realis PMI_Resi_Transaction data, generated {report.generated_at}.
               </div>
+              {reportIsStale && (
+                <div className="no-print" style={{
+                  fontSize: '12px', color: 'rgba(248,244,236,0.9)', marginTop: '8px',
+                  background: 'rgba(255,165,0,0.08)', border: '1px solid rgba(255,165,0,0.35)',
+                  borderRadius: '3px', padding: '8px 12px'
+                }}>
+                  ⚠️ This report was generated on {report.generated_at} ({reportDaysAgo} days ago) — click "Generate Report" above to refresh with the latest URA data.
+                </div>
+              )}
             </>
           )}
         </div>
