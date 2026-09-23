@@ -31,6 +31,11 @@ export default function MyProfile({ agent, token, onUpdate }) {
   const [photoUrl, setPhotoUrl] = useState(agent.photo_url || '');
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState('');
+  // Reference photos for building this agent's avatar. Separate from the headshot
+  // above: that is one cropped circle for the poster, these are raw likeness material.
+  const [avatarPhotos, setAvatarPhotos] = useState(agent.avatar_photos || []);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
   const [greetingCopied, setGreetingCopied] = useState(false);
   const [posterTemplates, setPosterTemplates] = useState([]);
   const [changingEmail, setChangingEmail] = useState(false);
@@ -263,6 +268,54 @@ export default function MyProfile({ agent, token, onUpdate }) {
     }
   };
 
+  const readAsBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const handleAvatarSelect = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';                       // let the same file be re-picked after a failure
+    if (!files.length) return;
+    setAvatarUploading(true); setAvatarError('');
+    try {
+      const images = await Promise.all(files.map(readAsBase64));
+      const res = await fetch(`${API}/api/profile/avatar-photos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ images })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Upload failed');
+      setAvatarPhotos(data.avatar_photos);
+      onUpdate({ ...agent, avatar_photos: data.avatar_photos });
+      if (data.skipped) setAvatarError(`${data.skipped} file${data.skipped > 1 ? 's' : ''} could not be read and were skipped.`);
+    } catch (err) {
+      setAvatarError(err.message);
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleAvatarRemove = async (url) => {
+    setAvatarError('');
+    try {
+      const res = await fetch(`${API}/api/profile/avatar-photos`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ url })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Could not remove');
+      setAvatarPhotos(data.avatar_photos);
+      onUpdate({ ...agent, avatar_photos: data.avatar_photos });
+    } catch (err) {
+      setAvatarError(err.message);
+    }
+  };
+
   const toneOptions = ['Warm & Conversational', 'Formal & Professional', 'Bold & Punchy'];
   const emphasisOptions = ['Family Living & Emotional Comfort', 'Investment Returns & Capital Appreciation', 'Lifestyle & Prestige', 'Architecture & Design'];
 
@@ -299,6 +352,63 @@ export default function MyProfile({ agent, token, onUpdate }) {
             </div>
             {photoError && <div className="error-msg">{photoError}</div>}
           </div>
+        </div>
+
+        <div className="section-label" style={{ marginTop: '26px' }}>Photos of You (for Signature videos)</div>
+
+        <div className="form-group">
+          <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.6)', lineHeight: 1.6, maxWidth: '620px', marginBottom: '12px' }}>
+            Give us a few photos of yourself once, and we use them for every Signature video you
+            ever order — you never have to do this again. This is separate from the headshot
+            above, which is just for your posters.
+            <br /><br />
+            <strong style={{ color: 'rgba(248,244,236,0.8)' }}>What works best:</strong> three to five
+            photos — facing the camera, and turned slightly to each side. Even daylight, nothing
+            harsh. No sunglasses or hat. Wear what you would wear to a viewing, because that is
+            what you will be wearing in the video.
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {avatarPhotos.map((url) => (
+              <div key={url} style={{ position: 'relative' }}>
+                <img
+                  src={url}
+                  alt=""
+                  style={{ width: '84px', height: '112px', objectFit: 'cover', borderRadius: '3px', border: '1px solid rgba(212,175,55,0.3)' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAvatarRemove(url)}
+                  aria-label="Remove this photo"
+                  style={{
+                    position: 'absolute', top: '-7px', right: '-7px', width: '22px', height: '22px',
+                    borderRadius: '50%', border: '1px solid rgba(212,175,55,0.5)', background: '#1a1a1a',
+                    color: '#F0C84A', cursor: 'pointer', fontSize: '13px', lineHeight: '1', padding: 0
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            {avatarPhotos.length < 8 && (
+              <label
+                className="btn-gold"
+                style={{ maxWidth: '190px', display: 'inline-block', cursor: 'pointer', textAlign: 'center' }}
+              >
+                {avatarUploading ? 'Uploading...' : avatarPhotos.length ? 'Add More' : 'Add Photos of You'}
+                <input
+                  type="file" accept="image/*" multiple
+                  onChange={handleAvatarSelect}
+                  disabled={avatarUploading}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            )}
+          </div>
+          <div style={{ fontSize: '11px', color: 'rgba(248,244,236,0.4)', marginTop: '8px' }}>
+            {avatarPhotos.length}/8 added. Signature videos are made for you and are not generated instantly.
+          </div>
+          {avatarError && <div className="error-msg">{avatarError}</div>}
         </div>
 
         <div className="form-grid">
