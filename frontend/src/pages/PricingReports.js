@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { formatPriceM } from '../utils/format';
 
 const API = process.env.REACT_APP_API_URL || '';
@@ -13,19 +13,41 @@ const WINDOW_OPTIONS = [
   { value: 36, label: 'Past 36 months' },
 ];
 
+// contract_date comes from the backend as "MM/YYYY" (see ura_market_pulse.py).
+// A plain string sort breaks across year boundaries ("07/2024" < "12/2023"
+// lexicographically, though 07/2024 is the more recent one) -- this turns it
+// into a single comparable number (year*12 + month) so Date sorting is
+// actually chronological. Falls back to 0 for anything unparseable so a
+// stray bad value sorts to one end instead of throwing.
+function parseContractDateSort(dateStr) {
+  const m = /^(\d{1,2})\/(\d{4})$/.exec(dateStr || '');
+  if (!m) return 0;
+  return Number(m[2]) * 12 + Number(m[1]);
+}
+
 // Data-driven so a column can be hidden (e.g. when printing for a buyer who
-// doesn't need to see property type) without touching the table markup.
+// doesn't need to see property type) without touching the table markup, and
+// so it can be sorted without a separate switch statement -- sortValue
+// returns the comparable primitive (a number for numeric/date columns, a
+// lowercased string for text ones) that the click-to-sort handler compares.
 const COLUMNS = [
-  { key: 'street', label: 'Street', render: c => c.street },
-  { key: 'district', label: 'District', render: c => c.district },
-  { key: 'property_type', label: 'Type', render: c => c.property_type },
-  { key: 'tenure', label: 'Tenure', render: c => c.tenure },
-  { key: 'area_sqft', label: 'Land (sqft)', render: c => c.area_sqft.toLocaleString() },
-  { key: 'psf', label: 'PSF', render: c => `SGD ${c.psf.toLocaleString()}` },
-  { key: 'price', label: 'Price', render: c => `SGD ${formatPriceM(c.price)}` },
-  { key: 'contract_date', label: 'Date', render: c => c.contract_date },
+  { key: 'street', label: 'Street', render: c => c.street, sortValue: c => (c.street || '').toLowerCase() },
+  { key: 'district', label: 'District', render: c => c.district, sortValue: c => (c.district || '').toLowerCase() },
+  { key: 'property_type', label: 'Type', render: c => c.property_type, sortValue: c => (c.property_type || '').toLowerCase() },
+  { key: 'tenure', label: 'Tenure', render: c => c.tenure, sortValue: c => (c.tenure || '').toLowerCase() },
+  { key: 'area_sqft', label: 'Land (sqft)', render: c => c.area_sqft.toLocaleString(), sortValue: c => Number(c.area_sqft) || 0 },
+  { key: 'psf', label: 'PSF', render: c => `SGD ${c.psf.toLocaleString()}`, sortValue: c => Number(c.psf) || 0 },
+  { key: 'price', label: 'Price', render: c => `SGD ${formatPriceM(c.price)}`, sortValue: c => Number(c.price) || 0 },
+  { key: 'contract_date', label: 'Date', render: c => c.contract_date, sortValue: c => parseContractDateSort(c.contract_date) },
 ];
 const DEFAULT_VISIBLE_COLUMNS = COLUMNS.reduce((acc, col) => ({ ...acc, [col.key]: true }), {});
+// Default view: latest transaction first -- that's the more useful read for
+// an agent eyeballing a freshly generated report (most relevant comps up
+// top), and numeric/date columns default to their "biggest first" direction
+// generally, while text columns default to A-Z. See handleSort below.
+const DEFAULT_SORT_KEY = 'contract_date';
+const DEFAULT_SORT_DIR = 'desc';
+const DESC_FIRST_COLUMNS = new Set(['area_sqft', 'psf', 'price', 'contract_date']);
 
 // Persisted across tab switches (and browser restarts) so a generated report
 // isn't lost just because the agent clicked to another page -- this page's
@@ -68,18 +90,49 @@ export default function PricingReports({ token }) {
   const [error, setError] = useState('');
   const [report, setReport] = useState(persisted?.report || null);
   const [visibleColumns, setVisibleColumns] = useState({ ...DEFAULT_VISIBLE_COLUMNS, ...(persisted?.visibleColumns || {}) });
+  const [sortKey, setSortKey] = useState(persisted?.sortKey || DEFAULT_SORT_KEY);
+  const [sortDir, setSortDir] = useState(persisted?.sortDir || DEFAULT_SORT_DIR);
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ street, propertyType, landSize, windowMonths, report, visibleColumns }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ street, propertyType, landSize, windowMonths, report, visibleColumns, sortKey, sortDir }));
     } catch {
       // localStorage unavailable (e.g. private browsing) -- report just won't persist, not fatal
     }
-  }, [street, propertyType, landSize, windowMonths, report, visibleColumns]);
+  }, [street, propertyType, landSize, windowMonths, report, visibleColumns, sortKey, sortDir]);
 
   const toggleColumn = (key) => {
     setVisibleColumns(v => ({ ...v, [key]: !v[key] }));
   };
+
+  // Clicking the active column's heading again flips direction; clicking a
+  // different heading switches to it with a sensible starting direction
+  // (biggest/latest first for numbers and dates, A-Z for text) rather than
+  // always defaulting to ascending, which would put the smallest/oldest
+  // comp on top the first time an agent clicks "Price" or "Date".
+  const handleSort = (key) => {
+    if (sortKey === key) {
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir(DESC_FIRST_COLUMNS.has(key) ? 'desc' : 'asc');
+    }
+  };
+
+  const sortedComparables = useMemo(() => {
+    const rows = report?.comparables || [];
+    const col = COLUMNS.find(c => c.key === sortKey);
+    if (!col) return rows;
+    const sorted = [...rows].sort((a, b) => {
+      const av = col.sortValue(a);
+      const bv = col.sortValue(b);
+      if (av < bv) return -1;
+      if (av > bv) return 1;
+      return 0;
+    });
+    if (sortDir === 'desc') sorted.reverse();
+    return sorted;
+  }, [report, sortKey, sortDir]);
 
   // A saved report persists across browser restarts (see STORAGE_KEY above),
   // so an agent can be looking at one that's weeks old without any signal
@@ -223,13 +276,27 @@ export default function PricingReports({ token }) {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid rgba(212,175,55,0.2)', color: 'rgba(248,244,236,0.4)', textAlign: 'left' }}>
-                      {COLUMNS.filter(col => visibleColumns[col.key] !== false).map(col => (
-                        <th key={col.key} style={{ padding: '6px 10px', fontWeight: 400, fontSize: '11px' }}>{col.label.toUpperCase()}</th>
-                      ))}
+                      {COLUMNS.filter(col => visibleColumns[col.key] !== false).map(col => {
+                        const active = sortKey === col.key;
+                        return (
+                          <th
+                            key={col.key}
+                            onClick={() => handleSort(col.key)}
+                            title={`Sort by ${col.label}`}
+                            style={{
+                              padding: '6px 10px', fontWeight: 400, fontSize: '11px',
+                              cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
+                              color: active ? 'rgba(240,200,74,0.85)' : 'rgba(248,244,236,0.4)'
+                            }}
+                          >
+                            {col.label.toUpperCase()}{active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>
-                    {report.comparables.map((c, i) => (
+                    {sortedComparables.map((c, i) => (
                       <tr key={i} style={{ borderBottom: '1px solid rgba(212,175,55,0.08)' }}>
                         {COLUMNS.filter(col => visibleColumns[col.key] !== false).map(col => (
                           <td key={col.key} style={{ padding: '8px 10px', color: 'var(--cream-dim)' }}>{col.render(c)}</td>

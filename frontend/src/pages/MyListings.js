@@ -90,6 +90,19 @@ function buildListingUrl(listing) {
     : `nestlist.sg/l/${listing.id.slice(0, 8)}`;
 }
 
+// Google Maps search/directions for the listing's full street address --
+// `location` is the agent's own raw record (house number and all), which is
+// exactly right here: My Listings is agent-facing only, unlike every
+// buyer-facing surface above (captions, posters, public listing page), which
+// deliberately shows only the district ("hide the road"). Returns null when
+// there's no usable address so callers can hide the link entirely rather
+// than opening a blank/broken map.
+function buildMapsUrl(location) {
+  const trimmed = (location || '').trim();
+  if (!trimmed) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(trimmed)}`;
+}
+
 function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) {
   if (platform === 'linkedin') return buildLinkedInInsightCaption(listing, agent, marketPulse);
 
@@ -1169,6 +1182,24 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
           }}>
             <div className="listing-card-title">{l.property_type} — {l.location} — {formatPriceDisplay(l.price) ? `SGD ${formatPriceDisplay(l.price)}` : 'Price on request'}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {buildMapsUrl(l.location) && (
+                <a
+                  href={buildMapsUrl(l.location)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  title="View on Google Map / Directions"
+                  style={{
+                    fontSize: '16px',
+                    padding: '4px',
+                    opacity: 0.7,
+                    textDecoration: 'none',
+                    lineHeight: 1
+                  }}
+                >
+                  🗺️
+                </a>
+              )}
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(l); }}
                 title="Edit listing"
@@ -2061,6 +2092,24 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
           }}>
             <div className="listing-card-title">{l.property_type} — {l.location} — {formatPriceDisplay(l.price) ? `SGD ${formatPriceDisplay(l.price)}` : 'Price on request'}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {buildMapsUrl(l.location) && (
+                <a
+                  href={buildMapsUrl(l.location)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  title="View on Google Map / Directions"
+                  style={{
+                    fontSize: '16px',
+                    padding: '4px',
+                    opacity: 0.7,
+                    textDecoration: 'none',
+                    lineHeight: 1
+                  }}
+                >
+                  🗺️
+                </a>
+              )}
               <button
                 onClick={(e) => { e.stopPropagation(); handleRestore(l.id); }}
                 disabled={restoring[l.id]}
