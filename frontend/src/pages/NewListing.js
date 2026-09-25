@@ -109,6 +109,11 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const [photoStageSuccess, setPhotoStageSuccess] = useState('');
   const [photoStageError, setPhotoStageError] = useState('');
   const [stagedPhotoUrls, setStagedPhotoUrls] = useState([]);
+  // Per-listing writing style override -- '' means "use my profile tone"
+  // (the default already set on My Profile), so we only ever send
+  // writing_style to the backend when the agent picked something other
+  // than the default for this one listing.
+  const [writingStyle, setWritingStyle] = useState('');
   // Smart Fill sometimes guesses the wrong district (confirmed case: filled
   // "District 10" for a Tembeling Road property, which is District 15, when
   // the screenshots never even showed a district) -- these track whether the
@@ -123,6 +128,14 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const [priceAutofilled, setPriceAutofilled] = useState(false);
   const [priceConfirmed, setPriceConfirmed] = useState(false);
   const [priceGateOpen, setPriceGateOpen] = useState(false);
+  // Same safety net, for Bathrooms: the backend now tells us directly (via
+  // needs_confirmation) when it isn't confident about the bathroom count,
+  // rather than us inferring it from an autofilled value -- bathrooms is
+  // also expected to come back blank more often now, and a blank answer
+  // still needs a human look before it can flow into generation.
+  const [bathroomsAutofilled, setBathroomsAutofilled] = useState(false);
+  const [bathroomsConfirmed, setBathroomsConfirmed] = useState(false);
+  const [bathroomsGateOpen, setBathroomsGateOpen] = useState(false);
   const fileRef = useRef();
   const photoRef = useRef();
   const folderRef = useRef();
@@ -130,6 +143,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const stageFolderRef = useRef();
   const districtSelectRef = useRef();
   const priceInputRef = useRef();
+  const bathroomsInputRef = useRef();
 
   // Persist form to localStorage whenever it changes (skip while editing an existing listing)
   useEffect(() => {
@@ -178,6 +192,10 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     setPriceAutofilled(false);
     setPriceConfirmed(false);
     setPriceGateOpen(false);
+    setBathroomsAutofilled(false);
+    setBathroomsConfirmed(false);
+    setBathroomsGateOpen(false);
+    setWritingStyle('');
     if (fileRef.current) fileRef.current.value = '';
     if (photoRef.current) photoRef.current.value = '';
     if (stagePhotoRef.current) stagePhotoRef.current.value = '';
@@ -353,6 +371,19 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         setDistrictAutofilled(true);
         setDistrictConfirmed(false);
         setDistrictGateOpen(false);
+      }
+      // Bathrooms works differently from District/Price above: the backend
+      // tells us directly (needs_confirmation) when it isn't confident,
+      // rather than us treating "a value came back" as the signal -- a
+      // guess AND a blank both need a look, since bathrooms is expected to
+      // come back blank more often now. Strip the flag out of `extracted`
+      // before merging so it never rides along into the /generate payload.
+      const needsConfirmation = Array.isArray(extracted.needs_confirmation) ? extracted.needs_confirmation : [];
+      delete extracted.needs_confirmation;
+      if (needsConfirmation.includes('bathrooms')) {
+        setBathroomsAutofilled(true);
+        setBathroomsConfirmed(false);
+        setBathroomsGateOpen(false);
       }
       setForm(f => ({ ...f, ...extracted }));
       setImageSuccess(`Details extracted from ${files.length} image${files.length > 1 ? 's' : ''}! Please review and adjust if needed.`);
@@ -583,16 +614,19 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     // instead of clearing one, clicking Generate again, then hitting the other.
     const districtNeedsConfirm = !isEditing && districtAutofilled && !districtConfirmed;
     const priceNeedsConfirm = !isEditing && priceAutofilled && !priceConfirmed;
-    if (districtNeedsConfirm || priceNeedsConfirm) {
+    const bathroomsNeedsConfirm = !isEditing && bathroomsAutofilled && !bathroomsConfirmed;
+    if (districtNeedsConfirm || priceNeedsConfirm || bathroomsNeedsConfirm) {
       setPropertyTypeInvalid(false);
       setError('');
       setDistrictGateOpen(districtNeedsConfirm);
       setPriceGateOpen(priceNeedsConfirm);
+      setBathroomsGateOpen(bathroomsNeedsConfirm);
       return;
     }
     setPropertyTypeInvalid(false);
     setDistrictGateOpen(false);
     setPriceGateOpen(false);
+    setBathroomsGateOpen(false);
     doSubmit();
   };
 
@@ -606,6 +640,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     setDistrictConfirmed(true);
     setDistrictGateOpen(false);
     if (priceAutofilled && !priceConfirmed) { setPriceGateOpen(true); return; }
+    if (bathroomsAutofilled && !bathroomsConfirmed) { setBathroomsGateOpen(true); return; }
     doSubmit();
   };
 
@@ -613,6 +648,15 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     setPriceConfirmed(true);
     setPriceGateOpen(false);
     if (districtAutofilled && !districtConfirmed) { setDistrictGateOpen(true); return; }
+    if (bathroomsAutofilled && !bathroomsConfirmed) { setBathroomsGateOpen(true); return; }
+    doSubmit();
+  };
+
+  const confirmBathroomsAndMaybeGenerate = () => {
+    setBathroomsConfirmed(true);
+    setBathroomsGateOpen(false);
+    if (districtAutofilled && !districtConfirmed) { setDistrictGateOpen(true); return; }
+    if (priceAutofilled && !priceConfirmed) { setPriceGateOpen(true); return; }
     doSubmit();
   };
 
@@ -629,6 +673,14 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     if (priceInputRef.current) {
       priceInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       priceInputRef.current.focus();
+    }
+  };
+
+  const jumpToBathroomsField = () => {
+    setBathroomsGateOpen(false);
+    if (bathroomsInputRef.current) {
+      bathroomsInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      bathroomsInputRef.current.focus();
     }
   };
 
@@ -651,7 +703,11 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       const res = await fetch(`${API}/api/listings/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...payload, photo_urls: stagedPhotoUrls })
+        // writing_style is per-listing and optional -- only sent when the
+        // agent picked something other than "use my profile tone" for this
+        // one listing; leaving it out lets the backend fall back to their
+        // profile's own tone, same as before this picker existed.
+        body: JSON.stringify({ ...payload, photo_urls: stagedPhotoUrls, ...(writingStyle ? { writing_style: writingStyle } : {}) })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Error generating listing');
@@ -864,7 +920,41 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
             </div>
             <div className="form-group">
               <label className="form-label">7b. Bathrooms</label>
-              <input className="form-input" value={form.bathrooms} onChange={e => set('bathrooms', e.target.value)} placeholder="e.g. 4" />
+              <input
+                ref={bathroomsInputRef}
+                className="form-input"
+                value={form.bathrooms}
+                onChange={e => {
+                  set('bathrooms', e.target.value);
+                  // Typing/editing by hand -- even clearing it back to blank
+                  // -- is the agent looking at it and deciding, so it always
+                  // counts as confirmed, same as Price above.
+                  setBathroomsConfirmed(true);
+                  setBathroomsGateOpen(false);
+                }}
+                placeholder="e.g. 4"
+              />
+              {bathroomsAutofilled && !bathroomsConfirmed && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px',
+                  fontSize: '12px', color: 'rgba(248,244,236,0.85)', marginTop: '8px',
+                  background: 'rgba(255,165,0,0.08)', border: '1px solid rgba(255,165,0,0.35)',
+                  borderRadius: '3px', padding: '8px 12px'
+                }}>
+                  <span>⚠️ Your screenshots weren't clear on bathrooms — please confirm or fill this in yourself.</span>
+                  <button
+                    type="button"
+                    onClick={() => { setBathroomsConfirmed(true); setBathroomsGateOpen(false); }}
+                    style={{
+                      background: 'transparent', border: '1px solid rgba(255,165,0,0.5)', color: '#F0C84A',
+                      padding: '3px 10px', borderRadius: '3px', cursor: 'pointer', fontSize: '12px',
+                      fontFamily: "'Montserrat', sans-serif", whiteSpace: 'nowrap'
+                    }}
+                  >
+                    ✓ Correct
+                  </button>
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">8. Asking Price (SGD, in Millions) (optional)</label>
@@ -932,6 +1022,25 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
             The short code in your buyer link (nestlist.sg/&lt;handle&gt;/&lt;code&gt;). Auto-generated from the street — leave blank to auto-generate, or type your own.
           </div>
         </div>
+
+        {!isEditing && (
+          <div className="form-group">
+            <label className="form-label">Writing Style for This Listing (optional)</label>
+            <select
+              className="form-select"
+              value={writingStyle}
+              onChange={e => setWritingStyle(e.target.value)}
+            >
+              <option value="">Use my profile's default tone</option>
+              <option value="Warm & Conversational">Warm & Conversational</option>
+              <option value="Formal & Professional">Formal & Professional</option>
+              <option value="Bold & Punchy">Bold & Punchy</option>
+            </select>
+            <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
+              Overrides your profile's writing style — for this listing only. Your profile's default tone (My Profile) is unaffected and every other listing keeps using it.
+            </div>
+          </div>
+        )}
 
         {!isEditing && (
           <div style={{
@@ -1078,6 +1187,39 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
                 }}
               >
                 Change Price
+              </button>
+            </div>
+          </div>
+        )}
+
+        {bathroomsGateOpen && (
+          <div style={{
+            background: 'rgba(255,165,0,0.08)', border: '1px solid rgba(255,165,0,0.35)',
+            borderRadius: '4px', padding: '14px 16px', marginTop: '12px'
+          }}>
+            <div style={{ fontSize: '13px', color: 'rgba(248,244,236,0.9)', marginBottom: '10px' }}>
+              ⚠️ We weren't confident about Bathrooms from your screenshots{form.bathrooms ? ` (currently "${form.bathrooms}")` : ' (currently blank)'} — please confirm or fill it in before generating.
+            </div>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                type="button" onClick={confirmBathroomsAndMaybeGenerate}
+                style={{
+                  background: 'rgba(212,175,55,0.2)', border: '1px solid rgba(212,175,55,0.5)',
+                  color: '#F0C84A', padding: '7px 16px', borderRadius: '3px', cursor: 'pointer',
+                  fontSize: '13px', fontFamily: "'Montserrat', sans-serif"
+                }}
+              >
+                ✓ Yes, that's correct — Generate
+              </button>
+              <button
+                type="button" onClick={jumpToBathroomsField}
+                style={{
+                  background: 'transparent', border: '1px solid rgba(248,244,236,0.25)',
+                  color: 'rgba(248,244,236,0.7)', padding: '7px 16px', borderRadius: '3px', cursor: 'pointer',
+                  fontSize: '13px', fontFamily: "'Montserrat', sans-serif"
+                }}
+              >
+                Change Bathrooms
               </button>
             </div>
           </div>

@@ -125,10 +125,22 @@ function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) 
   const body = cleanContent.slice(0, 800);
   const shortBody = cleanContent.slice(0, 300);
 
-  const bullets = `• ${listing.land_size ? listing.land_size.toLocaleString() + ' sqft land' : 'Land on request'}
-• ${listing.built_up ? listing.built_up.toLocaleString() + ' sqft built-up' : 'Built-up on request'}
-• ${listing.bedrooms ? listing.bedrooms + ' Bedrooms' : 'Bedrooms on request'}
-• ${listing.features || 'Premium features throughout'}`;
+  // Fuller Quick Summary (Janel's feedback: the old fixed 4-line template --
+  // land size, built-up, bedrooms, features -- read as too thin). Every line
+  // here is conditional on the listing actually having that value: never pad
+  // with an "on request"/invented placeholder the way the old template did --
+  // a bullet either states a real fact or doesn't appear at all. Typically
+  // lands on 5-7 bullets for a fully-filled-in listing, fewer for a sparser one.
+  const bulletLines = [
+    listing.property_type,
+    displayLocation,
+    listing.land_size ? `${listing.land_size.toLocaleString()} sqft land` : null,
+    listing.built_up ? `${listing.built_up.toLocaleString()} sqft built-up` : null,
+    listing.bedrooms ? `${listing.bedrooms} Bedroom${String(listing.bedrooms) === '1' ? '' : 's'}` : null,
+    listing.bathrooms ? `${listing.bathrooms} Bathroom${String(listing.bathrooms) === '1' ? '' : 's'}` : null,
+    listing.features
+  ].filter(Boolean);
+  const bullets = bulletLines.map(line => `• ${line}`).join('\n');
 
   // PropertyGuru gets a plain description (no hashtags/emoji scaffolding --
   // portal listing fields aren't social captions), truncated to fit its
@@ -353,6 +365,30 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const [deletingPhoto, setDeletingPhoto] = useState({});
   const [enhancingPhoto, setEnhancingPhoto] = useState({});
   const [enhancePhotoError, setEnhancePhotoError] = useState({});
+  // Undo-enhancement, in-session only: keyed `${listingId}-${index}` ->
+  // { originalUrl, enhancedUrl } -- the exact pair this browser tab sent to
+  // /enhance. The backend's /restore call needs both URLs, and we only ever
+  // have the original one in memory for the lifetime of this tab (it isn't
+  // persisted anywhere), so a page reload legitimately loses the ability to
+  // undo -- the UI below only ever shows Undo while this entry still exists.
+  const [enhanceUndo, setEnhanceUndo] = useState({});
+  const [undoingEnhance, setUndoingEnhance] = useState({});
+  const [undoEnhanceError, setUndoEnhanceError] = useState({});
+  // Add-more-photos (My Listings): appends to a listing's existing photos
+  // rather than replacing them. Separate state from the New Listing page's
+  // own upload flow entirely -- keyed by listing id, same convention as
+  // everything else in this file.
+  const [addPhotosLoading, setAddPhotosLoading] = useState({});
+  const [addPhotosLoadingLabel, setAddPhotosLoadingLabel] = useState({});
+  const [addPhotosSuccess, setAddPhotosSuccess] = useState({});
+  const [addPhotosError, setAddPhotosError] = useState({});
+  const addPhotoInputRefs = useRef({});
+  const addPhotoFolderRefs = useRef({});
+  // Poster price/phone override (render-only -- see handleGeneratePoster):
+  // typed values live here until Generate/Regenerate Poster is clicked, kept
+  // separate from the listing/profile records they never actually touch.
+  const [posterPriceOverride, setPosterPriceOverride] = useState({});
+  const [posterPhoneOverride, setPosterPhoneOverride] = useState({});
   const [editingContent, setEditingContent] = useState({});
   const [editedContent, setEditedContent] = useState({});
   const [contentSaving, setContentSaving] = useState({});
@@ -631,7 +667,15 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     try {
       const photoIndex = getFeaturedIndex(listing);
       const templateId = selectedTemplateFor(listing);
-      const res = await fetch(`${API}/api/listings/${listing.id}/generate-poster?photo_index=${photoIndex}&template_id=${templateId}`, {
+      // Render-only overrides: blank means "use the real stored value", same
+      // as today. Neither ever touches listing.price or the profile contact
+      // -- they only change what THIS poster image shows.
+      const priceOverride = (posterPriceOverride[listing.id] || '').trim().slice(0, 40);
+      const phoneOverride = (posterPhoneOverride[listing.id] || '').trim().slice(0, 60);
+      let url = `${API}/api/listings/${listing.id}/generate-poster?photo_index=${photoIndex}&template_id=${templateId}`;
+      if (priceOverride) url += `&price_override=${encodeURIComponent(priceOverride)}`;
+      if (phoneOverride) url += `&phone_override=${encodeURIComponent(phoneOverride)}`;
+      const res = await fetch(url, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -846,6 +890,14 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         Object.keys(next).forEach(k => { if (k.startsWith(`${listing.id}-`)) delete next[k]; });
         return next;
       });
+      // Same reasoning for any pending Undo-enhancement entries -- an index
+      // that used to mean "the photo we just enhanced" may now mean nothing,
+      // or a different photo, after this delete shifts everything above it.
+      setEnhanceUndo(u => {
+        const next = { ...u };
+        Object.keys(next).forEach(k => { if (k.startsWith(`${listing.id}-`)) delete next[k]; });
+        return next;
+      });
     } catch (err) {
       alert('Failed to delete photo.');
     } finally {
@@ -883,10 +935,160 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         images[index] = data.image_url;
         return { ...l, images };
       }));
+      // Remember exactly the pair we sent to /enhance so Undo can hand it
+      // straight back to /restore -- only kept in memory for this tab, per
+      // the backend contract (see handleUndoEnhance).
+      if (url) {
+        setEnhanceUndo(u => ({ ...u, [key]: { originalUrl: url, enhancedUrl: data.image_url } }));
+      }
+      setUndoEnhanceError(e => ({ ...e, [key]: null }));
     } catch (err) {
       setEnhancePhotoError(e => ({ ...e, [key]: { message: err.message, gentle: !!err.gentle } }));
     } finally {
       setEnhancingPhoto(e => ({ ...e, [key]: false }));
+    }
+  };
+
+  // Undo-enhancement: same-session only (see the enhanceUndo state comment
+  // above). Restores the listing's photo at this index back to the original
+  // URL it was enhanced from, using the exact pair the frontend passed to
+  // /enhance -- the backend keys entirely off these two URLs, not the index,
+  // so this is safe even if photos were reordered/deleted since.
+  const handleUndoEnhance = async (listing, index) => {
+    const key = `${listing.id}-${index}`;
+    const info = enhanceUndo[key];
+    if (!info) return;
+    setUndoingEnhance(u => ({ ...u, [key]: true }));
+    setUndoEnhanceError(e => ({ ...e, [key]: null }));
+    try {
+      const qs = `?original_url=${encodeURIComponent(info.originalUrl)}&enhanced_url=${encodeURIComponent(info.enhancedUrl)}`;
+      const res = await fetch(`${API}/api/listings/${listing.id}/images/restore${qs}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to undo enhancement');
+      setListings(prev => prev.map(l => l.id === listing.id ? { ...l, images: data.images || l.images } : l));
+      setEnhanceUndo(u => {
+        const next = { ...u };
+        delete next[key];
+        return next;
+      });
+    } catch (err) {
+      setUndoEnhanceError(e => ({ ...e, [key]: err.message }));
+    } finally {
+      setUndoingEnhance(u => ({ ...u, [key]: false }));
+    }
+  };
+
+  // Add more photos to an existing listing without disturbing the ones
+  // already there (append: true). Mirrors the downscale-then-chunk approach
+  // New Listing's own photo upload uses -- the production edge proxy kills
+  // any request body over ~10MB, so photos are resized client-side to max
+  // 1920px JPEG and sent a few at a time rather than all in one POST, same
+  // reasoning as everywhere else photos get uploaded in this app.
+  const handleAddMorePhotos = async (listing, e) => {
+    const allFiles = Array.from(e.target.files);
+    const files = allFiles
+      .filter(f => f.type === 'application/pdf' || f.type.startsWith('image/'))
+      .slice(0, 15);
+    if (!files.length) return;
+    setAddPhotosLoading(l => ({ ...l, [listing.id]: true }));
+    setAddPhotosLoadingLabel(l => ({ ...l, [listing.id]: 'Uploading photos...' }));
+    setAddPhotosSuccess(s => ({ ...s, [listing.id]: '' }));
+    setAddPhotosError(er => ({ ...er, [listing.id]: '' }));
+    try {
+      const readFile = (file) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve({
+          image_data: ev.target.result.split(',')[1],
+          media_type: file.type
+        });
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const downscaleOrRead = (file) => new Promise((resolve) => {
+        const objectUrl = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          try {
+            const maxDim = 1920;
+            const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(img.width * scale));
+            canvas.height = Math.max(1, Math.round(img.height * scale));
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            resolve({ image_data: dataUrl.split(',')[1], media_type: 'image/jpeg' });
+          } catch {
+            readFile(file).then(resolve, () => resolve(null));
+          }
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          readFile(file).then(resolve, () => resolve(null));
+        };
+        img.src = objectUrl;
+      });
+
+      const pdfFiles = files.filter(f => f.type === 'application/pdf');
+      const imageFiles = files.filter(f => f.type.startsWith('image/'));
+      const imageResults = (await Promise.all(imageFiles.map(downscaleOrRead))).filter(Boolean);
+
+      let pdfExtractedImages = [];
+      if (pdfFiles.length > 0) {
+        setAddPhotosLoadingLabel(l => ({ ...l, [listing.id]: pdfFiles.length > 1 ? 'Extracting photos from PDFs...' : 'Extracting photos from PDF...' }));
+        const pdfReads = await Promise.all(pdfFiles.map(readFile));
+        const perPdfResults = await Promise.all(pdfReads.map(async ({ image_data }) => {
+          const res = await fetch(`${API}/api/listings/extract-pdf-photos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ pdf_data: image_data })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || 'Failed to extract photos from PDF');
+          return data;
+        }));
+        pdfExtractedImages = perPdfResults.flatMap(r => r.images || []);
+        setAddPhotosLoadingLabel(l => ({ ...l, [listing.id]: 'Uploading photos...' }));
+      }
+
+      const images = [...imageResults, ...pdfExtractedImages].slice(0, 15);
+      if (!images.length) throw new Error('No photos found to upload.');
+
+      const CHUNK_SIZE = 4;
+      let finalData = null;
+      let cappedAny = false;
+      const startingCount = (listing.images || []).length;
+      for (let start = 0; start < images.length; start += CHUNK_SIZE) {
+        const chunk = images.slice(start, start + CHUNK_SIZE);
+        setAddPhotosLoadingLabel(l => ({ ...l, [listing.id]: `Uploading photos ${Math.min(start + chunk.length, images.length)} of ${images.length}...` }));
+        const res = await fetch(`${API}/api/listings/${listing.id}/upload-images`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ images: chunk, append: true })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to upload photos');
+        finalData = data;
+        if (data.image_urls) {
+          setListings(prev => prev.map(l => l.id === listing.id ? { ...l, images: data.image_urls } : l));
+        }
+        if (data.capped) { cappedAny = true; break; } // no point sending further chunks once the listing is full
+      }
+      const committedCount = (finalData?.image_urls || []).length;
+      const addedCount = Math.max(0, committedCount - startingCount);
+      const cappedNote = cappedAny ? ' Some photos were skipped because listings are capped at 15 photos.' : '';
+      setAddPhotosSuccess(s => ({ ...s, [listing.id]: `${addedCount} photo${addedCount === 1 ? '' : 's'} added!${cappedNote}` }));
+    } catch (err) {
+      setAddPhotosError(er => ({ ...er, [listing.id]: `Failed to upload photos: ${err.message}` }));
+    } finally {
+      setAddPhotosLoading(l => ({ ...l, [listing.id]: false }));
+      setAddPhotosLoadingLabel(l => ({ ...l, [listing.id]: 'Uploading photos...' }));
+      if (addPhotoInputRefs.current[listing.id]) addPhotoInputRefs.current[listing.id].value = '';
+      if (addPhotoFolderRefs.current[listing.id]) addPhotoFolderRefs.current[listing.id].value = '';
     }
   };
 
@@ -1293,15 +1495,32 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                             ⬇ Save
                           </button>
                           {isEnhancedUrl(url) ? (
-                            <div
-                              title="This photo has already been enhanced"
-                              style={{
-                                position: 'absolute', bottom: '4px', left: '4px',
-                                background: 'rgba(0,0,0,0.6)', color: 'rgba(240,200,74,0.75)',
-                                borderRadius: '3px', fontSize: '10px', padding: '2px 6px'
-                              }}
-                            >
-                              ✓ Enhanced
+                            <div style={{ position: 'absolute', bottom: '4px', left: '4px', display: 'flex', gap: '4px' }}>
+                              <div
+                                title="This photo has already been enhanced"
+                                style={{
+                                  background: 'rgba(0,0,0,0.6)', color: 'rgba(240,200,74,0.75)',
+                                  borderRadius: '3px', fontSize: '10px', padding: '2px 6px'
+                                }}
+                              >
+                                ✓ Enhanced
+                              </div>
+                              {enhanceUndo[`${l.id}-${i}`] && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUndoEnhance(l, i)}
+                                  disabled={undoingEnhance[`${l.id}-${i}`]}
+                                  title="Revert this photo to the original, unenhanced version"
+                                  style={{
+                                    background: 'rgba(0,0,0,0.6)', color: '#F0C84A',
+                                    border: 'none', borderRadius: '3px', fontSize: '10px', padding: '2px 6px',
+                                    cursor: undoingEnhance[`${l.id}-${i}`] ? 'not-allowed' : 'pointer',
+                                    opacity: undoingEnhance[`${l.id}-${i}`] ? 0.6 : 1
+                                  }}
+                                >
+                                  {undoingEnhance[`${l.id}-${i}`] ? '↺...' : '↺ Undo'}
+                                </button>
+                              )}
                             </div>
                           ) : (
                             <button
@@ -1334,6 +1553,12 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       </div>
                     );
                   })()}
+                  {Object.entries(undoEnhanceError).some(([k, v]) => k.startsWith(`${l.id}-`) && v) && (() => {
+                    const found = Object.entries(undoEnhanceError).find(([k, v]) => k.startsWith(`${l.id}-`) && v);
+                    const msg = found ? found[1] : null;
+                    if (!msg) return null;
+                    return <div style={{ color: '#e08080', fontSize: '12px', marginBottom: '10px' }}>{msg}</div>;
+                  })()}
                   <button
                     onClick={() => handleDownloadAll(l)}
                     disabled={downloading[l.id]}
@@ -1354,6 +1579,61 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                   </button>
                 </div>
               )}
+
+              {/* Add more photos -- always available, whether this listing has
+                  zero photos yet or already has some. Uses append: true so
+                  existing photos are never touched; the backend enforces the
+                  15-photo cap and tells us via `capped` if some didn't fit. */}
+              <div style={{ padding: (l.images && l.images.length > 0) ? '0 20px 16px' : '16px 20px 0' }}>
+                <input
+                  type="file" accept="image/*,application/pdf" multiple style={{ display: 'none' }}
+                  ref={el => { addPhotoInputRefs.current[l.id] = el; }}
+                  onChange={e => handleAddMorePhotos(l, e)}
+                />
+                <input
+                  type="file" accept="image/*" multiple webkitdirectory="" directory="" style={{ display: 'none' }}
+                  ref={el => { addPhotoFolderRefs.current[l.id] = el; }}
+                  onChange={e => handleAddMorePhotos(l, e)}
+                />
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => addPhotoInputRefs.current[l.id] && addPhotoInputRefs.current[l.id].click()}
+                    disabled={addPhotosLoading[l.id]}
+                    style={{
+                      background: 'transparent', border: '1px solid rgba(212,175,55,0.4)', color: '#F0C84A',
+                      padding: '8px 16px', borderRadius: '3px',
+                      cursor: addPhotosLoading[l.id] ? 'not-allowed' : 'pointer',
+                      fontSize: '12px', fontFamily: "'Montserrat', sans-serif",
+                      opacity: addPhotosLoading[l.id] ? 0.5 : 1
+                    }}
+                  >
+                    {addPhotosLoading[l.id]
+                      ? (addPhotosLoadingLabel[l.id] || 'Uploading photos...')
+                      : (l.images && l.images.length > 0 ? '➕ Add More Photos or PDF' : '➕ Add Photos or PDF')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addPhotoFolderRefs.current[l.id] && addPhotoFolderRefs.current[l.id].click()}
+                    disabled={addPhotosLoading[l.id]}
+                    style={{
+                      background: 'transparent', border: '1px solid rgba(212,175,55,0.25)', color: 'rgba(248,244,236,0.7)',
+                      padding: '8px 16px', borderRadius: '3px',
+                      cursor: addPhotosLoading[l.id] ? 'not-allowed' : 'pointer',
+                      fontSize: '12px', fontFamily: "'Montserrat', sans-serif",
+                      opacity: addPhotosLoading[l.id] ? 0.5 : 1
+                    }}
+                  >
+                    Add From a Folder
+                  </button>
+                </div>
+                {addPhotosError[l.id] && (
+                  <div style={{ color: '#e08080', fontSize: '12px', marginTop: '8px' }}>{addPhotosError[l.id]}</div>
+                )}
+                {addPhotosSuccess[l.id] && (
+                  <div style={{ color: '#F0C84A', fontSize: '12px', marginTop: '8px' }}>{addPhotosSuccess[l.id]}</div>
+                )}
+              </div>
 
               {editingContent[l.id] ? (
                 <div style={{ margin: '16px 20px 0' }}>
@@ -1557,6 +1837,44 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                         alt="Branded poster"
                         style={{ maxWidth: '220px', borderRadius: '4px', border: '1px solid rgba(212,175,55,0.3)', display: 'block' }}
                       />
+                    </div>
+                  )}
+
+                  {/* Render-only overrides for this poster image -- they never
+                      change the listing's stored price or the profile's
+                      contact number, only what THIS rendered poster shows.
+                      Blank uses the real stored values, same as before. */}
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', color: 'rgba(248,244,236,0.5)', marginBottom: '4px' }}>
+                        Poster price override (optional)
+                      </label>
+                      <input
+                        className="form-input"
+                        style={{ width: '160px', fontSize: '12px', padding: '6px 10px' }}
+                        maxLength={40}
+                        placeholder={`Actual: ${formatPriceDisplay(l.price) || 'on request'}`}
+                        value={posterPriceOverride[l.id] || ''}
+                        onChange={e => setPosterPriceOverride(p => ({ ...p, [l.id]: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', color: 'rgba(248,244,236,0.5)', marginBottom: '4px' }}>
+                        Poster phone override (optional)
+                      </label>
+                      <input
+                        className="form-input"
+                        style={{ width: '160px', fontSize: '12px', padding: '6px 10px' }}
+                        maxLength={60}
+                        placeholder={agent?.contact || 'Actual profile contact'}
+                        value={posterPhoneOverride[l.id] || ''}
+                        onChange={e => setPosterPhoneOverride(p => ({ ...p, [l.id]: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  {(posterPriceOverride[l.id] || posterPhoneOverride[l.id]) && (
+                    <div style={{ fontSize: '11px', color: 'rgba(248,244,236,0.5)', marginBottom: '10px' }}>
+                      This only changes what shows on the poster image — your listing's actual price and profile contact stay unchanged. Leave blank to use the real values.
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
