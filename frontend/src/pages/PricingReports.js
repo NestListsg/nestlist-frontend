@@ -289,7 +289,17 @@ export default function PricingReports({ token }) {
                               color: active ? 'rgba(240,200,74,0.85)' : 'rgba(248,244,236,0.4)'
                             }}
                           >
-                            {col.label.toUpperCase()}{active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                            {col.label.toUpperCase()}
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                marginLeft: '4px',
+                                fontSize: active ? '10px' : '9px',
+                                color: active ? '#F0C84A' : 'rgba(248,244,236,0.25)'
+                              }}
+                            >
+                              {active ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+                            </span>
                           </th>
                         );
                       })}
