@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { formatPriceM, formatPriceDisplay, maskPrice } from '../utils/format';
+import { genUploadSession } from '../utils/uploadSession';
 import MatchingBuyers from '../components/MatchingBuyers';
 
 const API = process.env.REACT_APP_API_URL || '';
@@ -987,6 +988,15 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   // any request body over ~10MB, so photos are resized client-side to max
   // 1920px JPEG and sent a few at a time rather than all in one POST, same
   // reasoning as everywhere else photos get uploaded in this app.
+  // Chunks share one upload_session and stage independently (batch_index),
+  // committing the listing's photo array to Postgres exactly once, on the
+  // final chunk (finalize: true). Previously each chunk committed on its
+  // own, so a folder upload did several separate read-modify-write commits
+  // against the same listing row -- under real network latency those raced
+  // each other and lost commits surfaced as "Couldn't save that photo
+  // change because the listing was being updated at the same time." One
+  // commit at the end removes the race entirely; see NewListing.js's own
+  // upload_session batch loop for the identical pattern.
   const handleAddMorePhotos = async (listing, e) => {
     const allFiles = Array.from(e.target.files);
     const files = allFiles
@@ -1059,28 +1069,40 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       if (!images.length) throw new Error('No photos found to upload.');
 
       const CHUNK_SIZE = 4;
+      const uploadSession = genUploadSession();
       let finalData = null;
-      let cappedAny = false;
+      let batchIndex = 0;
       const startingCount = (listing.images || []).length;
       for (let start = 0; start < images.length; start += CHUNK_SIZE) {
         const chunk = images.slice(start, start + CHUNK_SIZE);
+        const isLastChunk = start + CHUNK_SIZE >= images.length;
         setAddPhotosLoadingLabel(l => ({ ...l, [listing.id]: `Uploading photos ${Math.min(start + chunk.length, images.length)} of ${images.length}...` }));
         const res = await fetch(`${API}/api/listings/${listing.id}/upload-images`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ images: chunk, append: true })
+          body: JSON.stringify({
+            images: chunk,
+            append: true,
+            upload_session: uploadSession,
+            batch_index: batchIndex,
+            finalize: isLastChunk
+          })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed to upload photos');
         finalData = data;
-        if (data.image_urls) {
-          setListings(prev => prev.map(l => l.id === listing.id ? { ...l, images: data.image_urls } : l));
-        }
-        if (data.capped) { cappedAny = true; break; } // no point sending further chunks once the listing is full
+        batchIndex++;
+      }
+      // Only the finalize call actually commits to the listing's photo array
+      // (a single atomic append of existing + all staged chunks, de-duped and
+      // capped at 15) -- earlier chunks just stage, so image_urls/capped only
+      // mean anything on finalData, the response to that last call.
+      if (finalData?.image_urls) {
+        setListings(prev => prev.map(l => l.id === listing.id ? { ...l, images: finalData.image_urls } : l));
       }
       const committedCount = (finalData?.image_urls || []).length;
       const addedCount = Math.max(0, committedCount - startingCount);
-      const cappedNote = cappedAny ? ' Some photos were skipped because listings are capped at 15 photos.' : '';
+      const cappedNote = finalData?.capped ? ' Some photos were skipped because listings are capped at 15 photos.' : '';
       setAddPhotosSuccess(s => ({ ...s, [listing.id]: `${addedCount} photo${addedCount === 1 ? '' : 's'} added!${cappedNote}` }));
     } catch (err) {
       setAddPhotosError(er => ({ ...er, [listing.id]: `Failed to upload photos: ${err.message}` }));

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { millionsToFullNumber, fullNumberToMillions } from '../utils/format';
+import { genUploadSession } from '../utils/uploadSession';
 
 const API = process.env.REACT_APP_API_URL || '';
 const STORAGE_KEY = 'nestlist_new_listing_form';
@@ -155,21 +156,6 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   // sg_citizen defaults to true - GCB/landed purchases are Singapore Citizens only
-
-  // Backend's upload-images route accepts an upload_session id matching
-  // [A-Za-z0-9_-]{1,64}. crypto.randomUUID() satisfies that directly (36 hex
-  // chars + hyphens), with a manual fallback for older browsers that lack it.
-  const genUploadSession = () => {
-    try {
-      if (window.crypto && typeof window.crypto.randomUUID === 'function') {
-        return window.crypto.randomUUID();
-      }
-    } catch {}
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let out = '';
-    for (let i = 0; i < 32; i++) out += chars[Math.floor(Math.random() * chars.length)];
-    return out;
-  };
 
   const clearForm = () => {
     setForm(DEFAULT_FORM);
