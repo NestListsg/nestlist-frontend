@@ -301,7 +301,7 @@ Reply to arrange a private viewing or visit ${listingUrl}. Thank you! 🙏`
   const tiktok = {
     tiktok: `${listing.property_type} in ${displayLocation} 🏡
 ${maskedPrice}
-${listing.land_size ? listing.land_size.toLocaleString() + ' sqft' : ''} | ${listing.bedrooms ? listing.bedrooms + ' Bedrooms' : ''}
+${listing.land_size ? listing.land_size.toLocaleString() + ' sqft' : ''} | ${formatBedroomsBullet(listing) || ''}
 Upload your property video and use this caption 👆
 DM to arrange viewing 🔑
 
