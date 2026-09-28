@@ -361,6 +361,17 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const [captionStyle, setCaptionStyle] = useState({});
   const [pgLength, setPgLength] = useState({});
   const [copied, setCopied] = useState({});
+  // "Send to PropertyGuru" (#19) -- pulls the pre-formatted field block +
+  // photo zip from the backend export endpoints so an agent can paste/upload
+  // into PropertyGuru themselves in far fewer steps. NestList never talks to
+  // PropertyGuru directly (no posting API, and doing so would breach their
+  // ToS) -- this only prepares data for the agent to hand-carry over.
+  const [pgExport, setPgExport] = useState({});
+  const [pgExportLoading, setPgExportLoading] = useState({});
+  const [pgExportError, setPgExportError] = useState({});
+  const [pgFieldsCopied, setPgFieldsCopied] = useState({});
+  const [pgZipDownloading, setPgZipDownloading] = useState({});
+  const [pgZipError, setPgZipError] = useState({});
   const [deleting, setDeleting] = useState({});
   const [downloading, setDownloading] = useState({});
   const [shareStatus, setShareStatus] = useState({});
@@ -621,6 +632,82 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       alert('Failed to download photos. Please save images individually.');
     } finally {
       setDownloading(d => ({ ...d, [listing.id]: false }));
+    }
+  };
+
+  // "Send to PropertyGuru" (#19). Fetches the pre-built field block + photo
+  // count/zip link for this listing. Read-only, agent's-own-listing auth is
+  // enforced backend-side -- this never contacts PropertyGuru itself.
+  const handlePgExport = async (listing) => {
+    setPgExportLoading(l => ({ ...l, [listing.id]: true }));
+    setPgExportError(e => ({ ...e, [listing.id]: '' }));
+    try {
+      const res = await fetch(`${API}/api/listings/${listing.id}/propertyguru-export`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Could not prepare the PropertyGuru export. Please try again.');
+      setPgExport(p => ({ ...p, [listing.id]: data }));
+    } catch (err) {
+      setPgExportError(e => ({ ...e, [listing.id]: err.message || 'Could not prepare the PropertyGuru export. Please try again.' }));
+    } finally {
+      setPgExportLoading(l => ({ ...l, [listing.id]: false }));
+    }
+  };
+
+  const handleCopyPgFields = (listing) => {
+    const textBlock = (pgExport[listing.id] || {}).text_block;
+    if (!textBlock) return;
+    navigator.clipboard.writeText(textBlock).then(() => {
+      setPgFieldsCopied(c => ({ ...c, [listing.id]: true }));
+      setTimeout(() => setPgFieldsCopied(c => ({ ...c, [listing.id]: false })), 2500);
+    }).catch(() => {
+      setPgExportError(e => ({ ...e, [listing.id]: 'Could not copy automatically -- please select and copy the text manually.' }));
+    });
+  };
+
+  // Mirrors handleDownloadAll's blob-fetch + mobile share-sheet fallback --
+  // the zip is behind auth (agent's own listing), so a plain <a href> can't
+  // be used, and phones silently no-op a synthetic <a download> click.
+  const handleDownloadPgZip = async (listing) => {
+    const zipUrl = (pgExport[listing.id] || {}).photos_zip_url;
+    if (!zipUrl) return;
+    setPgZipDownloading(d => ({ ...d, [listing.id]: true }));
+    setPgZipError(e => ({ ...e, [listing.id]: '' }));
+    try {
+      const res = await fetch(zipUrl.startsWith('http') ? zipUrl : `${API}${zipUrl}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const filename = `propertyguru-photos-${listing.id.slice(0, 8)}.zip`;
+      const file = new File([blob], filename, { type: blob.type || 'application/zip' });
+
+      const isMobileOrTablet = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      let shared = false;
+      if (isMobileOrTablet && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+          shared = true;
+        } catch (shareErr) {
+          if (shareErr && shareErr.name === 'AbortError') { shared = true; }
+        }
+      }
+      if (!shared) {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      setPgZipError(e => ({ ...e, [listing.id]: 'Could not download the photo zip. Please try again.' }));
+    } finally {
+      setPgZipDownloading(d => ({ ...d, [listing.id]: false }));
     }
   };
 
@@ -2350,6 +2437,103 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                         {p.key === 'whatsapp' ? `${p.emoji} Share via WhatsApp` : `${p.emoji} Go to ${p.label} & Paste`}
                       </a>
                     </div>
+
+                    {p.key === 'propertyguru' && (
+                      <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(212,175,55,0.15)' }}>
+                        <label className="form-label">Send to PropertyGuru</label>
+                        <div style={{ fontSize: '11px', color: 'rgba(248,244,236,0.5)', marginBottom: '10px' }}>
+                          NestList has prepared everything — paste these fields into PropertyGuru and upload the photo folder. (Tenure isn't included since we don't store it — add it yourself.)
+                        </div>
+
+                        {!pgExport[l.id] && (
+                          <button
+                            type="button"
+                            className="btn-gold"
+                            style={{ maxWidth: '220px' }}
+                            onClick={() => handlePgExport(l)}
+                            disabled={pgExportLoading[l.id]}
+                          >
+                            {pgExportLoading[l.id] ? 'Preparing...' : '🏘️ Send to PropertyGuru'}
+                          </button>
+                        )}
+
+                        {pgExportError[l.id] && (
+                          <div className="error-msg">{pgExportError[l.id]}</div>
+                        )}
+
+                        {pgExport[l.id] && (
+                          <div>
+                            <div style={{
+                              background: 'rgba(0,0,0,0.3)',
+                              border: '1px solid rgba(212,175,55,0.2)',
+                              borderRadius: '4px',
+                              padding: '14px',
+                              fontSize: '12px',
+                              color: 'rgba(248,244,236,0.85)',
+                              whiteSpace: 'pre-wrap',
+                              maxHeight: '260px',
+                              overflowY: 'auto',
+                              marginBottom: '12px',
+                              lineHeight: '1.6'
+                            }}>
+                              {pgExport[l.id].text_block}
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '8px' }}>
+                              <button
+                                type="button"
+                                className="btn-primary"
+                                style={{ maxWidth: '220px' }}
+                                onClick={() => handleCopyPgFields(l)}
+                              >
+                                {pgFieldsCopied[l.id] ? '✅ Copied!' : '📋 Copy all fields'}
+                              </button>
+
+                              {pgExport[l.id].photo_count > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadPgZip(l)}
+                                  disabled={pgZipDownloading[l.id]}
+                                  style={{
+                                    background: 'transparent',
+                                    border: '1px solid rgba(212,175,55,0.4)',
+                                    color: '#F0C84A',
+                                    padding: '10px 16px',
+                                    borderRadius: '3px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    fontFamily: "'Montserrat', sans-serif"
+                                  }}
+                                >
+                                  {pgZipDownloading[l.id] ? 'Downloading...' : `⬇️ Download all photos (${pgExport[l.id].photo_count})`}
+                                </button>
+                              ) : (
+                                <span style={{ fontSize: '11px', color: 'rgba(248,244,236,0.5)' }}>No photos yet</span>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => handlePgExport(l)}
+                                disabled={pgExportLoading[l.id]}
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: 'rgba(248,244,236,0.4)',
+                                  cursor: 'pointer',
+                                  fontSize: '11px',
+                                  fontFamily: "'Montserrat', sans-serif",
+                                  textDecoration: 'underline'
+                                }}
+                              >
+                                {pgExportLoading[l.id] ? 'Refreshing...' : 'Refresh'}
+                              </button>
+                            </div>
+
+                            {pgZipError[l.id] && <div className="error-msg">{pgZipError[l.id]}</div>}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {p.key === 'instagram' && agent.can_use_instagram_beta && agent.instagram_username && (
                       <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(212,175,55,0.15)' }}>
