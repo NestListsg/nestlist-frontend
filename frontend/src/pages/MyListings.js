@@ -116,6 +116,18 @@ function formatBathroomsBullet(listing) {
   return `${listing.bathrooms} Bathroom${String(listing.bathrooms) === '1' ? '' : 's'}`;
 }
 
+// Bedrooms has the exact same backend-string quirk as bathrooms above: a
+// plain truthy check (`listing.bedrooms ? ... : null`) does NOT skip "0" --
+// a non-empty string is always truthy in JS, so that guard let a literal
+// "0 Bedrooms" bullet through. 0/"0"/blank/unset here means "unknown, not
+// asked", never a real fact, so it must never render. Only a real positive
+// count renders.
+function formatBedroomsBullet(listing) {
+  const n = Number(listing.bedrooms);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return `${listing.bedrooms} Bedroom${String(listing.bedrooms) === '1' ? '' : 's'}`;
+}
+
 function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) {
   if (platform === 'linkedin') return buildLinkedInInsightCaption(listing, agent, marketPulse);
 
@@ -149,7 +161,7 @@ function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) 
     displayLocation,
     listing.land_size ? `${listing.land_size.toLocaleString()} sqft land` : null,
     listing.built_up ? `${listing.built_up.toLocaleString()} sqft built-up` : null,
-    listing.bedrooms ? `${listing.bedrooms} Bedroom${String(listing.bedrooms) === '1' ? '' : 's'}` : null,
+    formatBedroomsBullet(listing),
     formatBathroomsBullet(listing),
     listing.features
   ].filter(Boolean);
