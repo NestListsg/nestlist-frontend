@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { formatPriceM } from '../utils/format';
+import { PROPERTY_TYPES } from '../utils/propertyTypes';
 
 const API = process.env.REACT_APP_API_URL || '';
 
-const PROPERTY_TYPES = [
-  '', 'Good Class Bungalow (GCB)', 'Detached/Bungalow', 'Semi-Detached', 'Inter-Terrace', 'Corner Terrace'
-];
+// The real options come from the shared constant; the leading '' is this
+// filter's own "Any landed type" placeholder. Sourcing from the shared list
+// also restores Penthouse, which this filter previously omitted -- labels now
+// match the listing/buyer pickers byte-for-byte.
+const PROPERTY_TYPE_OPTIONS = ['', ...PROPERTY_TYPES];
 
 const WINDOW_OPTIONS = [
   { value: 12, label: 'Past 12 months' },
@@ -187,7 +190,7 @@ export default function PricingReports({ token }) {
           <div className="form-group">
             <label className="form-label">Property Type (optional)</label>
             <select className="form-select" value={propertyType} onChange={e => setPropertyType(e.target.value)}>
-              {PROPERTY_TYPES.map(t => <option key={t} value={t}>{t || 'Any landed type'}</option>)}
+              {PROPERTY_TYPE_OPTIONS.map(t => <option key={t} value={t}>{t || 'Any landed type'}</option>)}
             </select>
           </div>
           <div className="form-group">

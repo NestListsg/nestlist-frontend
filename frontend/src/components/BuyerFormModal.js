@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
 import { millionsToFullNumber, fullNumberToMillions } from '../utils/format';
+import { PROPERTY_TYPES } from '../utils/propertyTypes';
 
 const API = process.env.REACT_APP_API_URL || '';
 
 const DISTRICTS = Array.from({ length: 28 }, (_, i) => `D${i + 1}`);
-const PROPERTY_TYPES = [
-  'Good Class Bungalow (GCB)', 'Detached/Bungalow', 'Semi-Detached',
-  'Inter-Terrace', 'Corner Terrace', 'Penthouse'
-];
 const TENURE_OPTIONS = ['', 'Freehold', '999-year Leasehold', '99-year Leasehold', 'Any'];
 const BUYING_FOR_OPTIONS = ['', 'Own stay', 'Investment', 'Both'];
 const SOLD_HOUSE_OPTIONS = ['', 'Yes', 'No', 'N/A'];

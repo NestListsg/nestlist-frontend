@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { millionsToFullNumber, fullNumberToMillions } from '../utils/format';
 import { genUploadSession } from '../utils/uploadSession';
+import { PROPERTY_TYPES } from '../utils/propertyTypes';
 
 const API = process.env.REACT_APP_API_URL || '';
 const STORAGE_KEY = 'nestlist_new_listing_form';
@@ -48,6 +49,11 @@ const SG_DISTRICTS = [
 ];
 
 const DEFAULT_FORM = {
+  // property_types is the source of truth (an agent can pick one OR MORE);
+  // property_type is kept in lock-step as the PRIMARY = first selected, for
+  // backward compatibility and the URA compliance check which read a single
+  // type. A single-type listing is just a list of one.
+  property_types: ['Good Class Bungalow (GCB)'],
   property_type: 'Good Class Bungalow (GCB)', location: '', district: '', land_size: 0,
   built_up: 0, bedrooms: '', bathrooms: '', price: '', features: '',
   plot_width: 0, plot_depth: 0, storeys: 0, site_coverage: 0,
@@ -59,8 +65,17 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const isConvertingSeller = isEditing && editingListing.status === 'lead';
   const [form, setForm] = useState(() => {
     if (editingListing) {
+      // Hydrate the multi-select from the full list the backend now serves.
+      // CRITICAL (flagged Sev2 data-loss): a multi-type listing must come back
+      // with ALL its types so saving doesn't collapse it to one. Fall back to
+      // the single property_type for older single-type listings that predate
+      // the property_types column (so they keep behaving exactly as before).
+      const editTypes = Array.isArray(editingListing.property_types) && editingListing.property_types.filter(Boolean).length
+        ? editingListing.property_types.filter(Boolean)
+        : (editingListing.property_type ? [editingListing.property_type] : []);
       return {
-        property_type: editingListing.property_type || DEFAULT_FORM.property_type,
+        property_types: editTypes,
+        property_type: editTypes[0] || editingListing.property_type || DEFAULT_FORM.property_type,
         location: editingListing.location || '',
         district: editingListing.district ? String(editingListing.district) : '',
         land_size: editingListing.land_size || 0,
@@ -79,7 +94,16 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     }
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : DEFAULT_FORM;
+      if (!saved) return DEFAULT_FORM;
+      const parsed = JSON.parse(saved);
+      // Back-compat: forms saved before multi-type held only property_type.
+      if (!Array.isArray(parsed.property_types)) {
+        parsed.property_types = parsed.property_type ? [parsed.property_type] : [];
+      } else {
+        parsed.property_types = parsed.property_types.filter(Boolean);
+      }
+      parsed.property_type = parsed.property_types[0] || '';
+      return parsed;
     } catch {
       return DEFAULT_FORM;
     }
@@ -156,6 +180,18 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   // sg_citizen defaults to true - GCB/landed purchases are Singapore Citizens only
+
+  // Toggle a property type in/out of the multi-select, always keeping
+  // property_type (the PRIMARY) pointed at the first still-selected type.
+  // Preserves selection order so "first picked" stays the primary.
+  const toggleType = (t) => {
+    setForm(f => {
+      const current = Array.isArray(f.property_types) ? f.property_types : [];
+      const next = current.includes(t) ? current.filter(x => x !== t) : [...current, t];
+      return { ...f, property_types: next, property_type: next[0] || '' };
+    });
+    setPropertyTypeInvalid(false);
+  };
 
   const clearForm = () => {
     setForm(DEFAULT_FORM);
@@ -371,7 +407,23 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         setBathroomsConfirmed(false);
         setBathroomsGateOpen(false);
       }
-      setForm(f => ({ ...f, ...extracted }));
+      setForm(f => {
+        const merged = { ...f, ...extracted };
+        // Smart Fill returns a single property_type (or, defensively, a list).
+        // Fold whatever came back into the multi-select so the chips reflect
+        // it, and keep property_type synced to the primary. Only overwrite the
+        // current selection when Smart Fill actually detected a type -- a blank
+        // result leaves the agent's existing picks untouched.
+        if (Array.isArray(extracted.property_types) && extracted.property_types.filter(Boolean).length) {
+          merged.property_types = extracted.property_types.filter(Boolean);
+        } else if (extracted.property_type) {
+          merged.property_types = [extracted.property_type];
+        } else {
+          merged.property_types = Array.isArray(f.property_types) ? f.property_types : [];
+        }
+        merged.property_type = merged.property_types[0] || '';
+        return merged;
+      });
       setImageSuccess(`Details extracted from ${files.length} image${files.length > 1 ? 's' : ''}! Please review and adjust if needed.`);
     } catch (err) {
       clearTimeout(timeout);
@@ -586,9 +638,9 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.property_type) {
+    if (!form.property_types || form.property_types.length === 0) {
       setPropertyTypeInvalid(true);
-      setError('Please select a property type before continuing.');
+      setError('Please select at least one property type before continuing.');
       return;
     }
     if (!declaration) { setError('Please tick the declaration box.'); return; }
@@ -672,7 +724,17 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
 
   const doSubmit = async () => {
     setError(''); setLoading(true); setResult(null); setSaveSuccess('');
-    const payload = { ...form, price: millionsToFullNumber(form.price) };
+    // Send the full list as property_types[] (backend accepts it) and keep
+    // property_type = the PRIMARY (first selected) for backward compatibility
+    // and the compliance check. Belt-and-braces: re-derive the primary here so
+    // it can never drift from the list, even after a localStorage restore.
+    const cleanTypes = (Array.isArray(form.property_types) ? form.property_types : []).filter(Boolean);
+    const payload = {
+      ...form,
+      property_types: cleanTypes,
+      property_type: cleanTypes[0] || form.property_type || '',
+      price: millionsToFullNumber(form.price)
+    };
     try {
       if (isEditing) {
         const res = await fetch(`${API}/api/listings/${editingListing.id}`, {
@@ -710,11 +772,6 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       setLoading(false);
     }
   };
-
-  const propertyTypes = [
-    'Good Class Bungalow (GCB)', 'Detached/Bungalow', 'Semi-Detached',
-    'Inter-Terrace', 'Corner Terrace', 'Penthouse'
-  ];
 
   return (
     <div className="page-content">
@@ -819,16 +876,40 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
           <div>
             <div className="form-group">
               <label className="form-label">1. Property Type</label>
-              <select
-                className={`form-select${propertyTypeInvalid || (imageSuccess && !form.property_type) ? ' invalid' : ''}`}
-                value={form.property_type}
-                onChange={e => { set('property_type', e.target.value); setPropertyTypeInvalid(false); }}
-                required
+              <div
+                style={{
+                  display: 'flex', flexWrap: 'wrap', gap: '8px',
+                  padding: '10px 12px', borderRadius: '3px',
+                  background: 'rgba(0,0,0,0.15)',
+                  border: `1px solid ${propertyTypeInvalid || (imageSuccess && form.property_types.length === 0) ? '#e05252' : 'rgba(212,175,55,0.3)'}`
+                }}
               >
-                <option value="" disabled>-- Select Property Type --</option>
-                {propertyTypes.map(t => <option key={t}>{t}</option>)}
-              </select>
-              {imageSuccess && !form.property_type && (
+                {PROPERTY_TYPES.map(t => {
+                  const active = form.property_types.includes(t);
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => toggleType(t)}
+                      style={{
+                        background: active ? 'rgba(212,175,55,0.25)' : 'transparent',
+                        border: `1px solid ${active ? '#D4AF37' : 'rgba(212,175,55,0.3)'}`,
+                        color: active ? '#F0C84A' : 'rgba(248,244,236,0.6)',
+                        padding: '6px 14px', borderRadius: '3px', cursor: 'pointer',
+                        fontSize: '12px', fontFamily: "'Montserrat', sans-serif"
+                      }}
+                    >
+                      {active ? '✓ ' : ''}{t}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
+                Pick one or more. {form.property_types.length > 1
+                  ? <>Your main type is <strong style={{ color: 'rgba(240,200,74,0.85)' }}>{form.property_types[0]}</strong> (the first one you selected).</>
+                  : 'If a property fits more than one type, select all that apply — the first you pick is the main type.'}
+              </div>
+              {imageSuccess && form.property_types.length === 0 && (
                 <div className="error-msg" style={{ marginTop: '6px' }}>
                   Your screenshots didn't state a property type — please select the correct one yourself before continuing.
                 </div>

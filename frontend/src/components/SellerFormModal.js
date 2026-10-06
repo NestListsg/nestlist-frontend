@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { millionsToFullNumber, fullNumberToMillions } from '../utils/format';
+import { PROPERTY_TYPES } from '../utils/propertyTypes';
 
 const API = process.env.REACT_APP_API_URL || '';
 
-const PROPERTY_TYPES = [
-  '', 'Good Class Bungalow (GCB)', 'Detached/Bungalow', 'Semi-Detached',
-  'Inter-Terrace', 'Corner Terrace', 'Penthouse'
-];
+// The real options come from the shared constant; the leading '' is this
+// form's own "-- Not Yet Known --" placeholder (a seller lead may not have a
+// confirmed type yet) and is intentionally not a matchable value.
+const PROPERTY_TYPE_OPTIONS = ['', ...PROPERTY_TYPES];
 const MANDATE_OPTIONS = ['', 'Exclusive', 'Open (Non-Exclusive)', 'Co-broke'];
 
 const emptyForm = {
@@ -103,7 +104,7 @@ export default function SellerFormModal({ token, seller, initialValues, onClose,
             <div className="form-group">
               <label className="form-label">Property Type</label>
               <select className="form-select" value={form.property_type} onChange={e => set('property_type', e.target.value)}>
-                {PROPERTY_TYPES.map(t => <option key={t} value={t}>{t || '-- Not Yet Known --'}</option>)}
+                {PROPERTY_TYPE_OPTIONS.map(t => <option key={t} value={t}>{t || '-- Not Yet Known --'}</option>)}
               </select>
             </div>
             <div className="form-group">
