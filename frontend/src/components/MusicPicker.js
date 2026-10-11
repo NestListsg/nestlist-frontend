@@ -23,6 +23,21 @@ const SILENT_WAV =
 
 export const MUSIC_AUTO = 'auto';
 
+// How long we wait for a preview to actually start before giving up on automatic
+// playback. play() returns a promise that can REJECT (autoplay blocked) or simply
+// never settle (browser won't start loading media, e.g. a background tab or a
+// stalled load). Either way the button must never sit on "Loading..." forever.
+const START_TIMEOUT_MS = 6000;
+
+// iOS Safari (incl. iPadOS posing as a Mac) only allows sound to start inside a tap.
+// Only those devices get the silent-clip unlock below; desktop browsers keep a plain path.
+const needsGestureUnlock = () => {
+  try {
+    const ua = navigator.userAgent || '';
+    return /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  } catch { return false; }
+};
+
 const gold = '#D4AF37';
 const goldLight = '#F0C84A';
 const cream = 'rgba(248,244,236,0.75)';
@@ -41,6 +56,9 @@ export default function MusicPicker({ tracks, value, onChange, token, disabled }
   const [playingId, setPlayingId] = useState(null);
   const [loadingId, setLoadingId] = useState(null);
   const [error, setError] = useState('');
+  // Track whose automatic playback didn't start: we show a native player (real
+  // controls, so a click on it is always a legitimate gesture) for that track.
+  const [fallbackId, setFallbackId] = useState(null);
   const audioRef = useRef(null);
   const requestRef = useRef(0); // bumps on every click so a slow download can't start late
   const unlockedRef = useRef(false);
@@ -55,6 +73,7 @@ export default function MusicPicker({ tracks, value, onChange, token, disabled }
     }
     setPlayingId(null);
     setLoadingId(null);
+    setFallbackId(null);
   };
 
   const stopLocalRef = useRef(stopLocal);
@@ -99,8 +118,8 @@ export default function MusicPicker({ tracks, value, onChange, token, disabled }
     if (!audioRef.current) audioRef.current = new Audio();
     const audio = audioRef.current;
 
-    // Unlock for iOS while we are still inside the tap (see SILENT_WAV).
-    if (!unlockedRef.current) {
+    // iOS only: unlock the element while we are still inside the tap (see above).
+    if (!unlockedRef.current && needsGestureUnlock()) {
       unlockedRef.current = true;
       try {
         audio.src = SILENT_WAV;
@@ -123,28 +142,81 @@ export default function MusicPicker({ tracks, value, onChange, token, disabled }
       // The agent tapped something else (or Stop) while we were downloading.
       if (requestRef.current !== myRequest) return;
 
-      audio.onended = () => { setPlayingId(null); };
-      audio.onerror = () => {
-        setPlayingId(null);
-        setLoadingId(null);
-        setError('Could not play the preview on this device.');
-      };
+      // Try to start playback and wait for ONE of four outcomes -- never forever:
+      //   'playing'  the browser actually started the sound
+      //   'blocked'  play() was rejected (autoplay policy: we're past the tap by now)
+      //   'error'    the audio could not be decoded/loaded
+      //   'timeout'  play() never settled within START_TIMEOUT_MS
+      audio.onended = null;
+      audio.onerror = null;
       audio.src = url;
-      audio.currentTime = 0;
-      await audio.play();
-      if (requestRef.current !== myRequest) { audio.pause(); return; }
+      try { audio.currentTime = 0; } catch { /* ignore */ }
+      const outcome = await new Promise((resolve) => {
+        let settled = false;
+        let timer = null;
+        const done = (v) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          audio.removeEventListener('playing', onPlaying);
+          audio.removeEventListener('error', onErr);
+          resolve(v);
+        };
+        const onPlaying = () => done('playing');
+        const onErr = () => done('error');
+        audio.addEventListener('playing', onPlaying);
+        audio.addEventListener('error', onErr);
+        timer = setTimeout(() => done('timeout'), START_TIMEOUT_MS);
+        try {
+          const p = audio.play();
+          if (p && p.then) {
+            p.then(
+              () => done('playing'),
+              (e) => done(e && e.name === 'NotAllowedError' ? 'blocked' : (e && e.name === 'AbortError' ? 'aborted' : 'error'))
+            );
+          }
+        } catch { done('blocked'); }
+      });
+
+      // Stopped / switched while we waited: the newer action owns the UI now.
+      if (requestRef.current !== myRequest) return;
+
+      if (outcome === 'playing') {
+        audio.onended = () => { setPlayingId(null); };
+        audio.onerror = () => {
+          setPlayingId(null);
+          setError('The preview stopped unexpectedly.');
+        };
+        stopActivePreview = stopLocalRef.current;
+        setLoadingId(null);
+        setPlayingId(id);
+        return;
+      }
+
+      // Automatic playback didn't start. Make sure this element can't start by
+      // itself later (that would double up with the native player), then hand the
+      // agent a real player for this track: pressing play on it IS a user gesture,
+      // so the browser allows it. Pressing Preview again also works now, because the
+      // audio is cached and play() runs straight inside that fresh click.
+      try { audio.pause(); audio.removeAttribute('src'); audio.load(); } catch { /* ignore */ }
       stopActivePreview = stopLocalRef.current;
       setLoadingId(null);
-      setPlayingId(id);
+      setPlayingId(null);
+      if (outcome === 'error') {
+        setError('Could not play this preview on your device.');
+      } else {
+        setFallbackId(id);
+        setError(
+          outcome === 'blocked'
+            ? 'Your browser needs a tap to start the sound. Press play on the player below.'
+            : 'The preview is taking too long to start. Press play on the player below, or tap Preview again.'
+        );
+      }
     } catch (e) {
       if (requestRef.current !== myRequest) return;
       setLoadingId(null);
       setPlayingId(null);
-      setError(
-        e && e.name === 'NotAllowedError'
-          ? 'Your browser blocked the sound. Tap Preview again.'
-          : (e && e.message) || 'Could not load the preview.'
-      );
+      setError((e && e.message) || 'Could not load the preview.');
     }
   };
 
@@ -233,7 +305,8 @@ export default function MusicPicker({ tracks, value, onChange, token, disabled }
           const playing = playingId === t.id;
           const loading = loadingId === t.id;
           return (
-            <div key={t.id} style={optionStyle(selected)}>
+            <React.Fragment key={t.id}>
+            <div style={optionStyle(selected)}>
               <button
                 type="button"
                 role="radio"
@@ -275,6 +348,15 @@ export default function MusicPicker({ tracks, value, onChange, token, disabled }
                 {loading ? 'Loading…' : playing ? '⏸ Stop' : '▶ Preview'}
               </button>
             </div>
+            {fallbackId === t.id && blobCache.get(t.id) && (
+              <audio
+                controls
+                preload="auto"
+                src={blobCache.get(t.id)}
+                style={{ width: '100%', height: '40px' }}
+              />
+            )}
+            </React.Fragment>
           );
         })}
       </div>
