@@ -114,7 +114,10 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const [error, setError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState('');
   const [imageLoading, setImageLoading] = useState(false);
-  const [imagePreviews, setImagePreviews] = useState([]);
+  // Smart Fill screenshots accumulate (up to MAX_SCREENSHOTS) across several
+  // selections; each entry is { id, file, preview } so one can be removed.
+  const [screenshots, setScreenshots] = useState([]);
+  const [screenshotNotice, setScreenshotNotice] = useState('');
   const [imageSuccess, setImageSuccess] = useState('');
   const [abortController, setAbortController] = useState(null);
   const [photoLoading, setPhotoLoading] = useState(false);
@@ -162,6 +165,14 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const [bathroomsConfirmed, setBathroomsConfirmed] = useState(false);
   const [bathroomsGateOpen, setBathroomsGateOpen] = useState(false);
   const fileRef = useRef();
+  // Latest form value for merge logic that runs after an await, and the last
+  // values Smart Fill itself wrote (so a later pass never overwrites a field
+  // the agent has since edited by hand).
+  const formRef = useRef(form);
+  formRef.current = form;
+  const lastAutofillRef = useRef({});
+  const screenshotsRef = useRef([]);
+  screenshotsRef.current = screenshots;
   const photoRef = useRef();
   const folderRef = useRef();
   const stagePhotoRef = useRef();
@@ -203,7 +214,10 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     setPhotoError('');
     setUploadedPhotoUrls([]);
     setShowReplacePhotos(false);
-    setImagePreviews([]);
+    screenshotsRef.current.forEach(s => { try { URL.revokeObjectURL(s.preview); } catch {} });
+    setScreenshots([]);
+    setScreenshotNotice('');
+    lastAutofillRef.current = {};
     setImageSuccess('');
     setStagedPhotoUrls([]);
     setPhotoStageSuccess('');
@@ -339,9 +353,55 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     setStagedPhotoUrls(prev => prev.filter((_, i) => i !== indexToRemove));
   };
 
-  const handleImageUpload = async (e) => {
-    const files = Array.from(e.target.files).slice(0, 5);
-    if (!files.length) return;
+  const MAX_SCREENSHOTS = 5;
+
+  // Release preview URLs when leaving the page.
+  useEffect(() => () => {
+    screenshotsRef.current.forEach(s => { try { URL.revokeObjectURL(s.preview); } catch {} });
+  }, []);
+
+  const isBlankValue = (v) =>
+    v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
+
+  // Reads the screenshots as base64. Big phone screenshots (several MB each)
+  // are re-encoded smaller so five of them can't blow past the production
+  // proxy's request-size limit; small ones go through untouched, and any
+  // decode problem falls back to the original bytes.
+  const readScreenshot = (file) => new Promise((resolve, reject) => {
+    const rawRead = () => {
+      const reader = new FileReader();
+      reader.onload = (ev) => resolve({
+        image_data: ev.target.result.split(',')[1],
+        media_type: file.type
+      });
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    };
+    if (file.size <= 1500000) { rawRead(); return; }
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      try {
+        const maxDim = 2400;
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        resolve({ image_data: dataUrl.split(',')[1], media_type: 'image/jpeg' });
+      } catch {
+        rawRead();
+      }
+    };
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); rawRead(); };
+    img.src = objectUrl;
+  });
+
+  // Runs Smart Fill extraction over the FULL set of screenshots passed in.
+  const runSmartFill = async (items) => {
+    if (!items.length) return;
     setImageLoading(true);
     setImageSuccess('');
     setError('');
@@ -350,20 +410,10 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     const timeout = setTimeout(() => {
       controller.abort();
       setImageLoading(false);
-      setError('Image reading timed out. Please try again or fill in the form manually.');
+      setError('Image reading timed out. Your screenshots are still here - tap "Read screenshots again", or fill in the form manually.');
     }, 60000);
     try {
-      const readFile = (file) => new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (ev) => resolve({
-          image_data: ev.target.result.split(',')[1],
-          media_type: file.type
-        });
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const images = await Promise.all(files.map(readFile));
-      setImagePreviews(files.map(f => URL.createObjectURL(f)));
+      const images = await Promise.all(items.map(it => readScreenshot(it.file)));
       const response = await fetch(`${API}/api/extract-listing-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -373,67 +423,143 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       clearTimeout(timeout);
       const extracted = await response.json();
       if (!response.ok) throw new Error(extracted.detail || 'Failed to read image');
+
+      // Never let a blank from this pass wipe a good value from an earlier
+      // screenshot or from the agent's own typing.
+      Object.keys(extracted).forEach(k => { if (isBlankValue(extracted[k])) delete extracted[k]; });
+
       if (extracted.price) {
         extracted.price = fullNumberToMillions(extracted.price);
+      }
+      if (extracted.district !== undefined) {
+        extracted.district = String(extracted.district);
+      }
+      // Bathrooms works differently from District/Price: the backend tells us
+      // directly (needs_confirmation) when it isn't confident, rather than us
+      // treating "a value came back" as the signal -- a guess AND a blank both
+      // need a look. Strip the flag out of `extracted` before merging so it
+      // never rides along into the /generate payload.
+      const needsConfirmation = Array.isArray(extracted.needs_confirmation) ? extracted.needs_confirmation : [];
+      delete extracted.needs_confirmation;
+
+      // Merge onto the current form. A field the agent edited by hand since
+      // Smart Fill last wrote it is left alone.
+      const current = formRef.current;
+      const last = lastAutofillRef.current;
+      const applied = {};
+      Object.keys(extracted).forEach(k => {
+        if (k === 'property_type' || k === 'property_types') return;
+        const hadAutofill = Object.prototype.hasOwnProperty.call(last, k);
+        const editedByHand = hadAutofill && String(current[k] ?? '') !== String(last[k] ?? '');
+        if (!editedByHand) applied[k] = extracted[k];
+      });
+      lastAutofillRef.current = { ...last, ...applied };
+
+      // Confirmation gates only re-arm for values Smart Fill actually wrote
+      // (district/price guesses must be looked at once).
+      if (applied.price) {
         setPriceAutofilled(true);
         setPriceConfirmed(false);
         setPriceGateOpen(false);
       }
-      // Pre-select district only when Smart Fill actually detected one --
-      // never overwrite an existing/blank selection with an empty value.
-      // We never guess the district ourselves (e.g. from the street); it's
-      // either read here from what the backend detected, or picked by hand.
-      // Smart Fill's district guess isn't always right, so mark it as an
-      // unconfirmed auto-fill -- the warning banner and the generate-time
-      // gate both key off this pair of flags.
-      if (extracted.district === undefined || extracted.district === null || extracted.district === '') {
-        delete extracted.district;
-      } else {
-        extracted.district = String(extracted.district);
+      if (applied.district) {
         setDistrictAutofilled(true);
         setDistrictConfirmed(false);
         setDistrictGateOpen(false);
       }
-      // Bathrooms works differently from District/Price above: the backend
-      // tells us directly (needs_confirmation) when it isn't confident,
-      // rather than us treating "a value came back" as the signal -- a
-      // guess AND a blank both need a look, since bathrooms is expected to
-      // come back blank more often now. Strip the flag out of `extracted`
-      // before merging so it never rides along into the /generate payload.
-      const needsConfirmation = Array.isArray(extracted.needs_confirmation) ? extracted.needs_confirmation : [];
-      delete extracted.needs_confirmation;
       if (needsConfirmation.includes('bathrooms')) {
         setBathroomsAutofilled(true);
         setBathroomsConfirmed(false);
         setBathroomsGateOpen(false);
       }
+
       setForm(f => {
-        const merged = { ...f, ...extracted };
+        const merged = { ...f, ...applied };
         // Smart Fill returns a single property_type (or, defensively, a list).
         // Fold whatever came back into the multi-select so the chips reflect
         // it, and keep property_type synced to the primary. Only overwrite the
         // current selection when Smart Fill actually detected a type -- a blank
         // result leaves the agent's existing picks untouched.
+        const fCurrent = Array.isArray(f.property_types) ? f.property_types : [];
         if (Array.isArray(extracted.property_types) && extracted.property_types.filter(Boolean).length) {
           merged.property_types = extracted.property_types.filter(Boolean);
         } else if (extracted.property_type) {
           merged.property_types = [extracted.property_type];
         } else {
-          merged.property_types = Array.isArray(f.property_types) ? f.property_types : [];
+          merged.property_types = fCurrent;
         }
         merged.property_type = merged.property_types[0] || '';
         return merged;
       });
-      setImageSuccess(`Details extracted from ${files.length} image${files.length > 1 ? 's' : ''}! Please review and adjust if needed.`);
+      const n = items.length;
+      setImageSuccess(`Details extracted from ${n} image${n > 1 ? 's' : ''}! Please review and adjust if needed.`);
     } catch (err) {
       clearTimeout(timeout);
       if (err.name !== 'AbortError') {
-        setError('Could not read image. Please fill in the form manually.');
+        setError('Could not read your screenshots. They are still here - tap "Read screenshots again", or fill in the form manually.');
       }
     } finally {
       setImageLoading(false);
       setAbortController(null);
     }
+  };
+
+  // Adds to (never replaces) the screenshots already chosen, then re-reads the
+  // whole set so the form reflects every screenshot.
+  const handleImageUpload = (e) => {
+    const picked = Array.from(e.target.files || []).filter(f => f.type && f.type.startsWith('image/'));
+    const hadFiles = (e.target.files || []).length > 0;
+    e.target.value = ''; // so picking the same file again still fires onChange
+    setScreenshotNotice('');
+    if (!picked.length) {
+      if (hadFiles) setScreenshotNotice('Those files are not images - please choose screenshots (PNG or JPG).');
+      return;
+    }
+    const keyOf = (f) => `${f.name}|${f.size}|${f.lastModified}`;
+    const seen = new Set(screenshots.map(s => keyOf(s.file)));
+    const fresh = [];
+    let dupes = 0;
+    picked.forEach(f => {
+      const k = keyOf(f);
+      if (seen.has(k)) { dupes += 1; return; }
+      seen.add(k);
+      fresh.push(f);
+    });
+    const room = Math.max(0, MAX_SCREENSHOTS - screenshots.length);
+    const toAdd = fresh.slice(0, room);
+    const overflow = fresh.length - toAdd.length;
+    const notes = [];
+    if (overflow > 0) notes.push(`You can use up to ${MAX_SCREENSHOTS} screenshots - ${overflow} extra ${overflow === 1 ? 'one was' : 'were'} not added. Remove one with the x if you want to swap it.`);
+    if (dupes > 0) notes.push(`${dupes} duplicate ${dupes === 1 ? 'screenshot was' : 'screenshots were'} skipped.`);
+    if (notes.length) setScreenshotNotice(notes.join(' '));
+    if (!toAdd.length) return;
+    const next = [
+      ...screenshots,
+      ...toAdd.map(file => ({
+        id: `${keyOf(file)}|${Math.random().toString(36).slice(2, 8)}`,
+        file,
+        preview: URL.createObjectURL(file)
+      }))
+    ];
+    setScreenshots(next);
+    runSmartFill(next);
+  };
+
+  const removeScreenshot = (id) => {
+    if (imageLoading) return;
+    const target = screenshots.find(s => s.id === id);
+    if (!target) return;
+    try { URL.revokeObjectURL(target.preview); } catch {}
+    const next = screenshots.filter(s => s.id !== id);
+    setScreenshots(next);
+    setError('');
+    if (!next.length) {
+      setImageSuccess('');
+      setScreenshotNotice('');
+      return;
+    }
+    setScreenshotNotice('Screenshot removed. Anything it already filled in is left as it was - please review the form.');
+    runSmartFill(next);
   };
 
   const cancelImageUpload = () => {
@@ -445,10 +571,14 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
     }
   };
 
+  // Full reset of the Smart Fill box (the form fields stay as they are).
   const clearImages = () => {
-    setImagePreviews([]);
+    screenshots.forEach(s => { try { URL.revokeObjectURL(s.preview); } catch {} });
+    setScreenshots([]);
+    setScreenshotNotice('');
     setImageSuccess('');
     setError('');
+    lastAutofillRef.current = {};
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -829,9 +959,9 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <button
             className="btn-gold" type="button" style={{ maxWidth: '320px' }}
-            onClick={() => fileRef.current.click()} disabled={imageLoading}
+            onClick={() => fileRef.current.click()} disabled={imageLoading || screenshots.length >= MAX_SCREENSHOTS}
           >
-            {imageLoading ? <><span className="spinner" />Reading images...</> : 'Upload Property Screenshots (up to 5)'}
+            {imageLoading ? <><span className="spinner" />Reading images...</> : (screenshots.length === 0 ? 'Upload Property Screenshots (up to 5)' : (screenshots.length >= MAX_SCREENSHOTS ? 'Maximum 5 screenshots reached' : 'Add more screenshots'))}
           </button>
           {imageLoading && (
             <button
@@ -846,16 +976,53 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
             </button>
           )}
         </div>
-        {imagePreviews.length > 0 && (
+        {screenshots.length > 0 && (
           <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {imagePreviews.map((src, i) => (
-              <img key={i} src={src} alt={`Uploaded ${i + 1}`}
-                style={{ maxWidth: '150px', maxHeight: '120px', borderRadius: '4px', border: '1px solid rgba(212,175,55,0.3)' }} />
+            {screenshots.map((s, i) => (
+              <div key={s.id} style={{ position: 'relative' }}>
+                <img src={s.preview} alt={`Uploaded ${i + 1}`}
+                  style={{ display: 'block', maxWidth: '150px', maxHeight: '120px', borderRadius: '4px', border: '1px solid rgba(212,175,55,0.3)' }} />
+                <button
+                  type="button" onClick={() => removeScreenshot(s.id)} disabled={imageLoading}
+                  aria-label={`Remove screenshot ${i + 1}`} title="Remove this screenshot"
+                  style={{
+                    position: 'absolute', top: '-6px', right: '-6px', width: '22px', height: '22px',
+                    borderRadius: '50%', border: '1px solid rgba(212,175,55,0.6)',
+                    background: '#1a1a1a', color: '#F0C84A', fontSize: '12px', lineHeight: '20px',
+                    padding: 0, cursor: imageLoading ? 'not-allowed' : 'pointer',
+                    opacity: imageLoading ? 0.5 : 1
+                  }}
+                >
+                  &#10005;
+                </button>
+              </div>
             ))}
           </div>
         )}
+        {screenshots.length > 0 && (
+          <div style={{ marginTop: '8px', fontSize: '12px', color: 'rgba(248,244,236,0.6)' }}>
+            {screenshots.length} of {MAX_SCREENSHOTS} screenshots
+            {screenshots.length < MAX_SCREENSHOTS ? ' - add more any time and the details update from all of them.' : ' - the maximum.'}
+          </div>
+        )}
+        {screenshotNotice && (
+          <div style={{ marginTop: '8px', fontSize: '12px', color: '#F0C84A' }}>{screenshotNotice}</div>
+        )}
         {imageSuccess && <div className="success-msg" style={{ marginTop: '12px' }}>{imageSuccess}</div>}
-        {imageSuccess && (
+        {!imageLoading && !imageSuccess && screenshots.length > 0 && (
+          <button
+            type="button" onClick={() => runSmartFill(screenshots)}
+            style={{
+              marginTop: '8px', marginRight: '8px', background: 'transparent',
+              border: '1px solid rgba(212,175,55,0.5)', color: '#F0C84A',
+              padding: '6px 14px', borderRadius: '3px', cursor: 'pointer',
+              fontSize: '12px', fontFamily: "'Montserrat', sans-serif"
+            }}
+          >
+            Read screenshots again
+          </button>
+        )}
+        {screenshots.length > 0 && !imageLoading && (
           <button
             type="button" onClick={clearImages}
             style={{
