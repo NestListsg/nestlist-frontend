@@ -2,8 +2,21 @@ import React, { useEffect, useRef, useState } from 'react';
 import { formatPriceM, formatPriceDisplay, maskPrice } from '../utils/format';
 import { genUploadSession } from '../utils/uploadSession';
 import MatchingBuyers from '../components/MatchingBuyers';
+import MusicPicker, { MUSIC_AUTO } from '../components/MusicPicker';
 
 const API = process.env.REACT_APP_API_URL || '';
+
+// The backend does not remember an agent's music choice, so we do: last pick is kept
+// in this browser and pre-selected next time. Every generate/regenerate call still
+// sends the current selection explicitly. Storage can throw (private windows, blocked
+// site data), so every access is wrapped and the picker just falls back to Auto.
+const MUSIC_CHOICE_KEY = 'nestlist_music_track';
+const readSavedMusicChoice = () => {
+  try { return window.localStorage.getItem(MUSIC_CHOICE_KEY) || MUSIC_AUTO; } catch { return MUSIC_AUTO; }
+};
+const saveMusicChoice = (id) => {
+  try { window.localStorage.setItem(MUSIC_CHOICE_KEY, id); } catch { /* ignore */ }
+};
 
 // PropertyGuru's listing description field enforces a hard character cap --
 // unlike Facebook/Instagram/LinkedIn/WhatsApp, which comfortably fit our full
@@ -460,6 +473,11 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const [videoTemplates, setVideoTemplates] = useState([]);
   const [videoTemplateChoice, setVideoTemplateChoice] = useState({});
   const [marketPulse, setMarketPulse] = useState(null);
+  // Music for generated videos. musicTracks comes from GET /api/music-tracks (empty =
+  // picker hidden); musicChoice is the agent's pick ('auto' or a track id), shared by
+  // every listing card since it's a taste preference, not a per-listing setting.
+  const [musicTracks, setMusicTracks] = useState([]);
+  const [musicChoice, setMusicChoice] = useState(readSavedMusicChoice);
 
   // Feeds the LinkedIn write-up's market-insight opening -- fetched once, not
   // per-listing, since it's the same live GCB market snapshot regardless of
@@ -505,6 +523,38 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       .then(data => setVideoTemplates(Array.isArray(data) ? data : []))
       .catch(() => setVideoTemplates([]));
   }, [token]);
+
+  // Returns the fresh track list (or null if the fetch failed) so a caller that just hit
+  // "Unknown music track" can refresh and fall back to Auto.
+  const loadMusicTracks = async () => {
+    try {
+      const r = await fetch(`${API}/api/music-tracks`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) throw new Error('music-tracks ' + r.status);
+      const data = await r.json();
+      const tracks = Array.isArray(data?.tracks) ? data.tracks.filter(t => t && t.id) : [];
+      setMusicTracks(tracks);
+      return tracks;
+    } catch {
+      // Fail soft: no list means no picker, and videos generate with Auto exactly as before.
+      setMusicTracks([]);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    loadMusicTracks();
+    // eslint-disable-next-line
+  }, [token]);
+
+  // A saved pick can outlive its track (removed server-side). Treat it as Auto for
+  // display and for sending, without overwriting what's saved.
+  const effectiveMusicChoice =
+    musicChoice !== MUSIC_AUTO && musicTracks.some(t => t.id === musicChoice) ? musicChoice : MUSIC_AUTO;
+
+  const handleMusicChange = (id) => {
+    setMusicChoice(id);
+    saveMusicChoice(id);
+  };
 
   const selectedTemplateFor = (listing) =>
     posterTemplateChoice[listing.id] || listing.poster_template_id || agent.poster_template_id || 'editorial';
@@ -869,11 +919,23 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     try {
       const videoTemplateId = selectedVideoTemplateFor(listing);
       const photoIndex = getFeaturedIndex(listing);
-      const res = await fetch(`${API}/api/listings/${listing.id}/generate-video?video_template_id=${videoTemplateId}&photo_index=${photoIndex}`, {
+      // Auto = leave the param off entirely so the backend picks its default (today's behaviour).
+      const musicParam = effectiveMusicChoice !== MUSIC_AUTO
+        ? `&music_track=${encodeURIComponent(effectiveMusicChoice)}`
+        : '';
+      const res = await fetch(`${API}/api/listings/${listing.id}/generate-video?video_template_id=${videoTemplateId}&photo_index=${photoIndex}${musicParam}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 400 && musicParam && /unknown music track/i.test(String(data.detail || ''))) {
+        // The chosen track disappeared on the server. Refresh the list, fall back to
+        // Auto, and ask the agent to press the button again rather than silently
+        // rendering with music they didn't pick.
+        await loadMusicTracks();
+        handleMusicChange(MUSIC_AUTO);
+        throw new Error('That music option is no longer available, so we switched you back to Auto. Please press the button again.');
+      }
       if (!res.ok) throw new Error(data.detail || 'Failed to generate video');
 
       // Older backend responses returned the finished video directly.
@@ -2144,6 +2206,13 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       </div>
                     </div>
                   )}
+                  <MusicPicker
+                    tracks={musicTracks}
+                    value={effectiveMusicChoice}
+                    onChange={handleMusicChange}
+                    token={token}
+                    disabled={!!videoLoading[l.id]}
+                  />
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                     <button
                       className="btn-primary"
