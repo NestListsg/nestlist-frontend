@@ -3,6 +3,7 @@ import { formatPriceM, formatPriceDisplay, maskPrice } from '../utils/format';
 import { genUploadSession } from '../utils/uploadSession';
 import MatchingBuyers from '../components/MatchingBuyers';
 import MusicPicker, { MUSIC_AUTO } from '../components/MusicPicker';
+import VideoPhotoPicker, { VIDEO_PHOTO_MAX } from '../components/VideoPhotoPicker';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -16,6 +17,36 @@ const readSavedMusicChoice = () => {
 };
 const saveMusicChoice = (id) => {
   try { window.localStorage.setItem(MUSIC_CHOICE_KEY, id); } catch { /* ignore */ }
+};
+
+// Which photos go into the Classic video, per listing: { [listingId]: { mode, urls } }.
+// The backend does NOT remember this -- Auto means we send nothing and it chooses; a
+// custom pick is resent on every generate. We keep the pick in this browser so it
+// survives a reload. Storage can throw or hold junk, so every access is guarded and the
+// fallback is always "no entry" = Auto (today's behaviour).
+const VIDEO_PHOTOS_KEY = 'nestlist_video_photos';
+const readSavedVideoPhotos = () => {
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(VIDEO_PHOTOS_KEY) || '{}');
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    const out = {};
+    Object.keys(raw).forEach(id => {
+      const e = raw[id];
+      if (e && e.mode === 'custom' && Array.isArray(e.urls)) {
+        out[id] = { mode: 'custom', urls: e.urls.filter(u => typeof u === 'string').slice(0, VIDEO_PHOTO_MAX) };
+      }
+    });
+    return out;
+  } catch { return {}; }
+};
+const saveVideoPhotos = (all) => {
+  try {
+    const keep = {};
+    Object.keys(all).slice(-100).forEach(id => {
+      if (all[id] && all[id].mode === 'custom') keep[id] = all[id];
+    });
+    window.localStorage.setItem(VIDEO_PHOTOS_KEY, JSON.stringify(keep));
+  } catch { /* ignore */ }
 };
 
 // PropertyGuru's listing description field enforces a hard character cap --
@@ -475,6 +506,11 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const [posterTemplateChoice, setPosterTemplateChoice] = useState({});
   const [videoTemplates, setVideoTemplates] = useState([]);
   const [videoTemplateChoice, setVideoTemplateChoice] = useState({});
+  // Agent's photo pick for the Classic video, listingId -> { mode: 'auto'|'custom', urls }.
+  // No entry = Auto. Mirrored to localStorage (guarded) because the server doesn't store it.
+  const [videoPhotoPick, setVideoPhotoPick] = useState(readSavedVideoPhotos);
+  // What the last generate actually did with the pick, listingId -> [plain-language notes].
+  const [videoPhotoNotes, setVideoPhotoNotes] = useState({});
   const [marketPulse, setMarketPulse] = useState(null);
   // Music for generated videos. musicTracks comes from GET /api/music-tracks (empty =
   // picker hidden); musicChoice is the agent's pick ('auto' or a track id), shared by
@@ -582,6 +618,29 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const handleMusicChange = (id) => {
     setMusicChoice(id);
     saveMusicChoice(id);
+  };
+
+  // The agent's pick for a listing, limited to photos that are still on it (a photo can
+  // be deleted after being picked). Returns { mode, urls }; urls is empty unless the
+  // mode is 'custom' AND at least one picked photo still exists -- so the Auto path
+  // (no entry, or nothing valid picked) never sends anything.
+  const videoPhotoStateFor = (listing) => {
+    const entry = videoPhotoPick[listing.id];
+    if (!entry || entry.mode !== 'custom') return { mode: 'auto', urls: [] };
+    const have = new Set(listing.images || []);
+    const urls = [];
+    (entry.urls || []).forEach(u => { if (have.has(u) && !urls.includes(u)) urls.push(u); });
+    return { mode: 'custom', urls: urls.slice(0, VIDEO_PHOTO_MAX) };
+  };
+
+  const handleVideoPhotoChange = (listingId, next) => {
+    setVideoPhotoPick(prev => {
+      const all = { ...prev };
+      if (next.mode === 'custom') all[listingId] = { mode: 'custom', urls: (next.urls || []).slice(0, VIDEO_PHOTO_MAX) };
+      else delete all[listingId]; // back to Auto = no entry at all
+      saveVideoPhotos(all);
+      return all;
+    });
   };
 
   const selectedTemplateFor = (listing) =>
@@ -940,10 +999,29 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     }
   };
 
+  // Builds the plain-language notes shown under the video buttons from a generate (or
+  // status) response. `data` fields: video_photos_mode, video_photos_ignored, degradations.
+  const noteVideoPhotos = (listingId, data, askedForCustom) => {
+    const notes = [];
+    const seen = new Set();
+    const add = (t) => { const k = String(t || '').trim(); if (k && !seen.has(k)) { seen.add(k); notes.push(k); } };
+    (Array.isArray(data.degradations) ? data.degradations : []).forEach(d => {
+      add(typeof d === 'string' ? d : (d && (d.message || d.detail || d.note)) || '');
+    });
+    const ignored = Array.isArray(data.video_photos_ignored) ? data.video_photos_ignored.length : 0;
+    if (askedForCustom && data.video_photos_mode === 'auto') {
+      add('Your photo choice could not be used, so this video was made with Auto photos instead.');
+    } else if (ignored > 0 && notes.length === 0) {
+      add(`${ignored} of the photos you picked are no longer on this listing and were left out of the video.`);
+    }
+    setVideoPhotoNotes(n => ({ ...n, [listingId]: notes }));
+  };
+
   const handleGenerateVideo = async (listing) => {
     setVideoLoading(v => ({ ...v, [listing.id]: true }));
     setVideoError(e => ({ ...e, [listing.id]: '' }));
     setVideoQueueMsg(m => ({ ...m, [listing.id]: '' }));
+    setVideoPhotoNotes(n => ({ ...n, [listing.id]: [] }));
     try {
       const videoTemplateId = selectedVideoTemplateFor(listing);
       const photoIndex = getFeaturedIndex(listing);
@@ -951,11 +1029,28 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       const musicParam = effectiveMusicChoice !== MUSIC_AUTO
         ? `&music_track=${encodeURIComponent(effectiveMusicChoice)}`
         : '';
-      const res = await fetch(`${API}/api/listings/${listing.id}/generate-video?video_template_id=${videoTemplateId}&photo_index=${photoIndex}${musicParam}`, {
+      // Auto (the default) = send NO video_photos at all. A custom pick is sent as one
+      // repeated param per photo, in video order, as the exact URLs from listing.images.
+      const pickedPhotos = videoPhotoStateFor(listing).urls;
+      const photosParam = pickedPhotos.map(u => `&video_photos=${encodeURIComponent(u)}`).join('');
+      const res = await fetch(`${API}/api/listings/${listing.id}/generate-video?video_template_id=${videoTemplateId}&photo_index=${photoIndex}${musicParam}${photosParam}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json().catch(() => ({}));
+      if (res.status === 400 && photosParam && /unknown photo/i.test(String(data.detail || ''))) {
+        // Our copy of this listing's photos is out of date (another tab/device removed or
+        // replaced one). Re-read the photo list; the pick re-filters itself against it.
+        try {
+          const lr = await fetch(`${API}/api/listings?status=all`, { headers: { Authorization: `Bearer ${token}` } });
+          const all = lr.ok ? await lr.json() : null;
+          const fresh = Array.isArray(all) ? all.find(x => x.id === listing.id) : null;
+          if (fresh && Array.isArray(fresh.images)) {
+            setListings(prev => prev.map(x => x.id === listing.id ? { ...x, images: fresh.images } : x));
+          }
+        } catch { /* keep going -- the message below still tells them what to do */ }
+        throw new Error('Some of the photos you picked are no longer on this listing, so no video was made. We have refreshed the photos -- please choose your photos again, or switch to Auto, then press the button again.');
+      }
       if (res.status === 400 && musicParam && /unknown music track/i.test(String(data.detail || ''))) {
         // The chosen track disappeared on the server. Refresh the list, fall back to
         // Auto, and ask the agent to press the button again rather than silently
@@ -965,6 +1060,10 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         throw new Error('That music option is no longer available, so we switched you back to Auto. Please press the button again.');
       }
       if (!res.ok) throw new Error(data.detail || 'Failed to generate video');
+
+      // Tell the agent plainly what the video will actually contain when it differs from
+      // what they asked for (a pick that fell back to Auto, photos that were skipped).
+      noteVideoPhotos(listing.id, data, pickedPhotos.length > 0);
 
       // Older backend responses returned the finished video directly.
       if (data.video_url) {
@@ -1041,6 +1140,9 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         // that hasn't shipped the queue at all will report null for both, and
         // describeVideoQueue returns null for that, which clears this line back to
         // exactly today's behaviour (just the button's own loading label).
+        if (Array.isArray(updated.degradations) && updated.degradations.length) {
+          noteVideoPhotos(listing.id, updated, pickedPhotos.length > 0);
+        }
         const queuePos = updated.video_queue_position ?? updated.queue_position ?? null;
         const etaSecs = updated.video_eta_seconds ?? updated.eta_seconds ?? null;
         setVideoQueueMsg(m => ({ ...m, [listing.id]: describeVideoQueue(queuePos, etaSecs) }));
@@ -2250,6 +2352,13 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       </div>
                     </div>
                   )}
+                  <VideoPhotoPicker
+                    photos={l.images}
+                    mode={videoPhotoStateFor(l).mode}
+                    urls={videoPhotoStateFor(l).urls}
+                    onChange={(next) => handleVideoPhotoChange(l.id, next)}
+                    disabled={!!videoLoading[l.id]}
+                  />
                   <MusicPicker
                     tracks={musicTracks}
                     value={effectiveMusicChoice}
@@ -2322,8 +2431,11 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                             const imgs = l.images || [];
                             const hero = getFeaturedIndex(l);
                             // Same order the renderer uses: hero first, then the rest, capped at six.
-                            const used = [imgs[hero], ...imgs.filter((_, i) => i !== hero)]
-                              .filter(Boolean).slice(0, 6);
+                            // If the agent chose their own photos, those are the ones in the video.
+                            const chosenPhotos = videoPhotoStateFor(l).urls;
+                            const used = chosenPhotos.length
+                              ? chosenPhotos
+                              : [imgs[hero], ...imgs.filter((_, i) => i !== hero)].filter(Boolean).slice(0, 6);
                             return used.map((url) => {
                               const v = stored[url];
                               const text = typeof v === 'string' ? v : (v && v.text) || '';
@@ -2385,6 +2497,11 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
+                  {(videoPhotoNotes[l.id] || []).length > 0 && (
+                    <div role="status" style={{ color: '#F0C84A', fontSize: '12px', marginTop: '8px', lineHeight: 1.5 }}>
+                      {videoPhotoNotes[l.id].map((t, i) => <div key={i}>ℹ {t}</div>)}
                     </div>
                   )}
                   {!videoError[l.id] && videoQueueMsg[l.id] && (
