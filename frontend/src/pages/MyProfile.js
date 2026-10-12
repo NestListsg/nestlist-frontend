@@ -563,7 +563,7 @@ export default function MyProfile({ agent, token, onUpdate }) {
           <div style={{ fontSize: '11px', color: 'rgba(248,244,236,0.4)', marginTop: '8px' }}>
             {presenterBusy
               ? 'Uploading and preparing your clip — this can take a minute on a slow connection.'
-              : 'We keep the first few seconds and tidy the file up for you. Up to 200MB.'}
+              : 'Record about ten seconds talking to the camera. We use five of them, starting from your first word, so a pause before you begin is fine. Stand close enough that your head and shoulders fill most of the frame. Up to 200MB.'}
           </div>
           {presenterError && <div className="error-msg">{presenterError}</div>}
         </div>
