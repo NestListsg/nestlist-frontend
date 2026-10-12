@@ -414,15 +414,18 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const [deletingPhoto, setDeletingPhoto] = useState({});
   const [enhancingPhoto, setEnhancingPhoto] = useState({});
   const [enhancePhotoError, setEnhancePhotoError] = useState({});
-  // Undo-enhancement, in-session only: keyed `${listingId}-${index}` ->
+  // Undo-enhancement, in-session pair: keyed `${listingId}-${index}` ->
   // { originalUrl, enhancedUrl } -- the exact pair this browser tab sent to
-  // /enhance. The backend's /restore call needs both URLs, and we only ever
-  // have the original one in memory for the lifetime of this tab (it isn't
-  // persisted anywhere), so a page reload legitimately loses the ability to
-  // undo -- the UI below only ever shows Undo while this entry still exists.
+  // /enhance. A page reload loses THIS entry, but Undo still works afterwards
+  // via durableOriginals below (the server can recover the original itself).
   const [enhanceUndo, setEnhanceUndo] = useState({});
   const [undoingEnhance, setUndoingEnhance] = useState({});
   const [undoEnhanceError, setUndoEnhanceError] = useState({});
+  // Durable undo: listingId -> { <enhanced_url>: <original_url> } as reported by
+  // GET /images/originals. A photo URL that is a KEY here is an enhanced copy
+  // whose original the server can recover -- so Undo survives a page reload,
+  // unlike the in-session enhanceUndo above. Failures leave this empty (no durable Undo shown).
+  const [durableOriginals, setDurableOriginals] = useState({});
   // Add-more-photos (My Listings): appends to a listing's existing photos
   // rather than replacing them. Separate state from the New Listing page's
   // own upload flow entirely -- keyed by listing id, same convention as
@@ -497,6 +500,31 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       .then(data => setListings(Array.isArray(data) ? data : []))
       .catch(() => setListings([]));
   }, [token]);
+
+  // Durable Undo-enhancement: whenever a listing is open (or its photo set
+  // changes -- enhance, undo, delete, upload), ask the server which of its
+  // photos are enhanced copies with a recoverable original. Photos only render
+  // for the expanded card, so that's the only listing worth asking about.
+  // Any failure is swallowed on purpose: no map just means no durable Undo.
+  const expandedImagesKey = (listings.find(x => x.id === expanded)?.images || []).join('|');
+  useEffect(() => {
+    if (!expanded || !expandedImagesKey) return undefined;
+    let cancelled = false;
+    fetch(`${API}/api/listings/${expanded}/images/originals`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (cancelled) return;
+        const map = data && data.originals && typeof data.originals === 'object' && !Array.isArray(data.originals)
+          ? data.originals : {};
+        setDurableOriginals(d => ({ ...d, [expanded]: map }));
+      })
+      .catch(() => {
+        if (!cancelled) setDurableOriginals(d => ({ ...d, [expanded]: {} }));
+      });
+    return () => { cancelled = true; };
+  }, [expanded, expandedImagesKey, token]);
 
   // Restore the chatbot's listing context on mount to match whichever card
   // was left expanded before the agent last navigated away -- otherwise
@@ -1123,24 +1151,30 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     }
   };
 
-  // Undo-enhancement: same-session only (see the enhanceUndo state comment
-  // above). Restores the listing's photo at this index back to the original
+  // Undo-enhancement: works in-session (enhanceUndo pair) and after a reload
+  // (durableOriginals). Restores the listing's photo at this index back to the original
   // URL it was enhanced from, using the exact pair the frontend passed to
   // /enhance -- the backend keys entirely off these two URLs, not the index,
   // so this is safe even if photos were reordered/deleted since.
   const handleUndoEnhance = async (listing, index) => {
     const key = `${listing.id}-${index}`;
     const info = enhanceUndo[key];
-    if (!info) return;
+    const currentUrl = listing.images?.[index];
+    // In-session pair if we have it; otherwise the durable path, which only
+    // needs the enhanced URL (the server recovers the original from the filename).
+    const durable = !info && currentUrl && durableOriginals[listing.id]?.[currentUrl];
+    if (!info && !durable) return;
     setUndoingEnhance(u => ({ ...u, [key]: true }));
     setUndoEnhanceError(e => ({ ...e, [key]: null }));
     try {
-      const qs = `?original_url=${encodeURIComponent(info.originalUrl)}&enhanced_url=${encodeURIComponent(info.enhancedUrl)}`;
+      const qs = info
+        ? `?original_url=${encodeURIComponent(info.originalUrl)}&enhanced_url=${encodeURIComponent(info.enhancedUrl)}`
+        : `?enhanced_url=${encodeURIComponent(currentUrl)}`;
       const res = await fetch(`${API}/api/listings/${listing.id}/images/restore${qs}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || 'Failed to undo enhancement');
       setListings(prev => prev.map(l => l.id === listing.id ? { ...l, images: data.images || l.images } : l));
       setEnhanceUndo(u => {
@@ -1148,6 +1182,15 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         delete next[key];
         return next;
       });
+      // The restored photo is no longer an enhanced copy; drop it from the map
+      // right away (the images-changed effect then re-syncs with the server).
+      if (currentUrl) {
+        setDurableOriginals(d => {
+          const m = { ...(d[listing.id] || {}) };
+          delete m[currentUrl];
+          return { ...d, [listing.id]: m };
+        });
+      }
     } catch (err) {
       setUndoEnhanceError(e => ({ ...e, [key]: err.message }));
     } finally {
@@ -1689,7 +1732,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                           >
                             ⬇ Save
                           </button>
-                          {isEnhancedUrl(url) ? (
+                          {isEnhancedUrl(url) || durableOriginals[l.id]?.[url] ? (
                             <div style={{ position: 'absolute', bottom: '4px', left: '4px', display: 'flex', gap: '4px' }}>
                               <div
                                 title="This photo has already been enhanced"
@@ -1700,7 +1743,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                               >
                                 ✓ Enhanced
                               </div>
-                              {enhanceUndo[`${l.id}-${i}`] && (
+                              {(enhanceUndo[`${l.id}-${i}`] || durableOriginals[l.id]?.[url]) && (
                                 <button
                                   type="button"
                                   onClick={() => handleUndoEnhance(l, i)}
@@ -1709,6 +1752,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                                   style={{
                                     background: 'rgba(0,0,0,0.6)', color: '#F0C84A',
                                     border: 'none', borderRadius: '3px', fontSize: '10px', padding: '2px 6px',
+                                    minHeight: '22px',
                                     cursor: undoingEnhance[`${l.id}-${i}`] ? 'not-allowed' : 'pointer',
                                     opacity: undoingEnhance[`${l.id}-${i}`] ? 0.6 : 1
                                   }}
