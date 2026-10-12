@@ -1422,10 +1422,9 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       // repeated param per photo, in video order, as the exact URLs from listing.images.
       const pickedPhotos = videoPhotoStateFor(listing).urls;
       const photosParam = pickedPhotos.map(u => `&video_photos=${encodeURIComponent(u)}`).join('');
-      // Signature takes only music_track and video_photos.
-      const sigQuery = `${musicParam}${photosParam}`.replace(/^&/, '');
+      // Signature takes photo_index (same hero-photo meaning as Classic), music_track and video_photos.
       const requestUrl = isSig
-        ? `${API}/api/listings/${listing.id}/generate-signature${sigQuery ? `?${sigQuery}` : ''}`
+        ? `${API}/api/listings/${listing.id}/generate-signature?photo_index=${photoIndex}${musicParam}${photosParam}`
         : `${API}/api/listings/${listing.id}/generate-video?video_template_id=${videoTemplateId}&photo_index=${photoIndex}${musicParam}${photosParam}`;
       const res = await fetch(requestUrl, {
         method: 'POST',
@@ -1501,6 +1500,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         await new Promise(r => setTimeout(r, delay));
 
         let updated = null;
+        let pollFatal = false;
         try {
           if (useDedicatedStatus) {
             const pollRes = await fetch(`${API}/api/listings/${listing.id}/${isSig ? 'signature-status' : 'video-status'}`, {
@@ -1509,6 +1509,10 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
             if (pollRes.status === 404 && !isSig) {
               // Endpoint not deployed yet -- fall back for the rest of this poll.
               useDedicatedStatus = false;
+            } else if (isSig && pollRes.status >= 400 && pollRes.status < 500 && pollRes.status !== 408 && pollRes.status !== 429) {
+              // Signature only: a 4xx that will not fix itself (e.g. the status endpoint is
+              // missing) must not leave the agent watching a spinner for 45 minutes.
+              pollFatal = true;
             } else if (pollRes.ok) {
               updated = await pollRes.json();
             }
@@ -1522,6 +1526,10 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
           }
         } catch {
           continue; // transient poll failure -- keep waiting, the render is server-side
+        }
+        if (pollFatal) {
+          // Thrown outside the try above, whose catch would swallow it and keep polling.
+          throw new Error("We couldn't confirm your Signature video started. Please press the button to try again.");
         }
         if (!updated) continue;
 
