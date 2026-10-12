@@ -773,7 +773,9 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const [freshAgent, setFreshAgent] = useState(null);
   const [signatureOff, setSignatureOff] = useState(false);
   // listingId -> 'tall' | 'wide', learned from the Signature video once it loads, so the
-  // player box fits whatever shape the film turns out to be.
+  // player box fits whatever shape the film turns out to be. Until known we assume tall
+  // (9:16), which is what every generated Signature is; only the older hand-made demo
+  // Signature is wide (4:3) and it adjusts once it loads.
   const [sigShape, setSigShape] = useState({});
   const [posterError, setPosterError] = useState({});
   const [posterPhotoIndex, setPosterPhotoIndex] = useState({});
@@ -1431,8 +1433,10 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json().catch(() => ({}));
-      if (isSig && res.status === 503) {
-        // "Not switched on yet" is not the agent's fault and not an error: stop offering it.
+      if (isSig && res.status === 503 && /not switched on/i.test(String(data.detail || ''))) {
+        // Only THIS 503 means "feature not on yet": not the agent's fault, not an error, so stop
+        // offering it. Any other 503 (e.g. "We could not start your Signature just now") is a
+        // temporary hiccup -- it falls through to the error line below and the panel stays.
         setSignatureOff(true);
         return;
       }
@@ -2811,8 +2815,8 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       <div
                         style={{
                           width: '100%',
-                          maxWidth: (tierFor(l) === 'signature' && sigShape[l.id] !== 'tall') ? '460px' : '320px',
-                          aspectRatio: (tierFor(l) === 'signature' && sigShape[l.id] !== 'tall') ? '4 / 3' : '9 / 16',
+                          maxWidth: (tierFor(l) === 'signature' && sigShape[l.id] === 'wide') ? '460px' : '320px',
+                          aspectRatio: (tierFor(l) === 'signature' && sigShape[l.id] === 'wide') ? '4 / 3' : '9 / 16',
                           margin: '0 auto',
                           borderRadius: '4px',
                           border: '1px solid rgba(212,175,55,0.3)',
@@ -2900,7 +2904,13 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                         The same film, but it opens with your short clip of you talking to the camera, with your voice over the music.
                         It uses the photos and music you chose above. It is a separate video, so your Classic video stays exactly as it is.
                         {l.signature_video_url ? ' Regenerating replaces only your Signature video.' : ''}
+                        {' '}Its style follows the style of your most recent Classic video.
                       </div>
+                      {videoTemplateChoice[l.id] && videoTemplateChoice[l.id] !== (l.video_template_id || 'classic') && (
+                        <div style={{ color: '#F0C84A', fontSize: '12px', lineHeight: 1.5, marginBottom: '10px' }}>
+                          ℹ You picked a new style above. Make a Classic video first, and your Signature will then follow that style.
+                        </div>
+                      )}
                       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                         <button
                           type="button"
@@ -2942,6 +2952,17 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                           <a href="/my-profile" style={{ color: '#F0C84A' }}>Open My Profile</a>
                         </div>
                       )}
+                    </div>
+                  )}
+                  {!sigAvailable && l.signature_video_url && (
+                    <div style={{ marginTop: '10px' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadFile(l.signature_video_url, `${l.id.slice(0, 8)}-signature.mp4`)}
+                        style={downloadButtonStyle}
+                      >
+                        ⬇ Download Signature
+                      </button>
                     </div>
                   )}
                   {sigNeedsClip && (
