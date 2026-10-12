@@ -26,6 +26,11 @@ const saveMusicChoice = (id) => {
 // survives a reload. Storage can throw or hold junk, so every access is guarded and the
 // fallback is always "no entry" = Auto (today's behaviour).
 const VIDEO_PHOTOS_KEY = 'nestlist_video_photos';
+
+// A Signature job for a listing is a different job from its Classic job, so its loading /
+// queue / error / notes state lives under this key in the same per-listing state objects
+// (listing ids are plain uuids, so the two can never collide).
+const sigKey = (listingId) => `sig:${listingId}`;
 const readSavedVideoPhotos = () => {
   try {
     const raw = JSON.parse(window.localStorage.getItem(VIDEO_PHOTOS_KEY) || '{}');
@@ -761,6 +766,15 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   // signature_video_url (currently just the demo listing) -- default to 'signature'
   // so the premium clip plays first. Everything else ignores this entirely.
   const [videoTier, setVideoTier] = useState({});
+  // Signature = the premium film that opens with the agent's own presenting clip. The agent
+  // prop comes from login / localStorage and can be stale (e.g. a clip recorded in My Profile
+  // after login), so we also read a fresh copy on mount. signatureOff is set if the server
+  // says 503 "not switched on yet" -- we then stop offering it for the rest of this visit.
+  const [freshAgent, setFreshAgent] = useState(null);
+  const [signatureOff, setSignatureOff] = useState(false);
+  // listingId -> 'tall' | 'wide', learned from the Signature video once it loads, so the
+  // player box fits whatever shape the film turns out to be.
+  const [sigShape, setSigShape] = useState({});
   const [posterError, setPosterError] = useState({});
   const [posterPhotoIndex, setPosterPhotoIndex] = useState({});
   const [photoLoadError, setPhotoLoadError] = useState({});
@@ -903,6 +917,16 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       .then(r => r.json())
       .then(data => setPosterTemplates(Array.isArray(data) ? data : []))
       .catch(() => setPosterTemplates([]));
+  }, [token]);
+
+  useEffect(() => {
+    // Fail soft: if this fails we just use the agent prop we were given.
+    let cancelled = false;
+    fetch(`${API}/api/profile`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => { if (!cancelled && data && typeof data === 'object') setFreshAgent(data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, [token]);
 
   useEffect(() => {
@@ -1272,9 +1296,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   // number is "that many, counting itself, from the front"; null/undefined means
   // no queue info is available at all, and callers must treat that as "say nothing".
   //
-  // Only one job type renders today (Classic). A future Signature job would need
-  // its own line rather than sharing this one by listing id alone -- see the note
-  // in handleGenerateVideo where this is called.
+  // Classic and Signature jobs both use this; each keeps its own line (see sigKey).
   const describeVideoQueue = (queuePosition, etaSeconds) => {
     if (queuePosition === null || queuePosition === undefined) return null;
     const mins = (typeof etaSeconds === 'number' && !isNaN(etaSeconds)) ? Math.round(etaSeconds / 60) : null;
@@ -1377,11 +1399,18 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     });
   };
 
-  const handleGenerateVideo = async (listing) => {
-    setVideoLoading(v => ({ ...v, [listing.id]: true }));
-    setVideoError(e => ({ ...e, [listing.id]: '' }));
-    setVideoQueueMsg(m => ({ ...m, [listing.id]: '' }));
-    setVideoPhotoNotes(n => ({ ...n, [listing.id]: [] }));
+  // One handler for both tiers so queue, ETA, photo notes and polling stay identical.
+  // tier 'classic' = POST generate-video, 'signature' = POST generate-signature (the same
+  // film, opening with the agent's own presenting clip). Each tier's loading / queue /
+  // error / notes state is kept under its own key (jobKey) so they never overwrite each
+  // other, and a finished Signature only ever writes signature_video_url -- never video_url.
+  const handleGenerateVideo = async (listing, tier = 'classic') => {
+    const isSig = tier === 'signature';
+    const jobKey = isSig ? sigKey(listing.id) : listing.id;
+    setVideoLoading(v => ({ ...v, [jobKey]: true }));
+    setVideoError(e => ({ ...e, [jobKey]: '' }));
+    setVideoQueueMsg(m => ({ ...m, [jobKey]: '' }));
+    setVideoPhotoNotes(n => ({ ...n, [jobKey]: [] }));
     try {
       const videoTemplateId = selectedVideoTemplateFor(listing);
       const photoIndex = getFeaturedIndex(listing);
@@ -1393,11 +1422,21 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       // repeated param per photo, in video order, as the exact URLs from listing.images.
       const pickedPhotos = videoPhotoStateFor(listing).urls;
       const photosParam = pickedPhotos.map(u => `&video_photos=${encodeURIComponent(u)}`).join('');
-      const res = await fetch(`${API}/api/listings/${listing.id}/generate-video?video_template_id=${videoTemplateId}&photo_index=${photoIndex}${musicParam}${photosParam}`, {
+      // Signature takes only music_track and video_photos.
+      const sigQuery = `${musicParam}${photosParam}`.replace(/^&/, '');
+      const requestUrl = isSig
+        ? `${API}/api/listings/${listing.id}/generate-signature${sigQuery ? `?${sigQuery}` : ''}`
+        : `${API}/api/listings/${listing.id}/generate-video?video_template_id=${videoTemplateId}&photo_index=${photoIndex}${musicParam}${photosParam}`;
+      const res = await fetch(requestUrl, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json().catch(() => ({}));
+      if (isSig && res.status === 503) {
+        // "Not switched on yet" is not the agent's fault and not an error: stop offering it.
+        setSignatureOff(true);
+        return;
+      }
       if (res.status === 400 && photosParam && /unknown photo/i.test(String(data.detail || ''))) {
         // Our copy of this listing's photos is out of date (another tab/device removed or
         // replaced one). Re-read the photo list; the pick re-filters itself against it.
@@ -1419,14 +1458,14 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         handleMusicChange(MUSIC_AUTO);
         throw new Error('That music option is no longer available, so we switched you back to Auto. Please press the button again.');
       }
-      if (!res.ok) throw new Error(data.detail || 'Failed to generate video');
+      if (!res.ok) throw new Error(data.detail || (isSig ? 'Failed to generate your Signature video' : 'Failed to generate video'));
 
       // Tell the agent plainly what the video will actually contain when it differs from
       // what they asked for (a pick that fell back to Auto, photos that were skipped).
-      noteVideoPhotos(listing.id, data, pickedPhotos.length > 0);
+      noteVideoPhotos(jobKey, data, pickedPhotos.length > 0);
 
-      // Older backend responses returned the finished video directly.
-      if (data.video_url) {
+      // Older backend responses returned the finished video directly (Classic only).
+      if (!isSig && data.video_url) {
         setListings(prev => prev.map(l => l.id === listing.id ? { ...l, video_url: data.video_url, video_template_id: data.video_template_id } : l));
         return;
       }
@@ -1436,7 +1475,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       // it immediately instead of waiting for the first poll tick.
       setVideoQueueMsg(m => ({
         ...m,
-        [listing.id]: describeVideoQueue(
+        [jobKey]: describeVideoQueue(
           data.video_queue_position ?? data.queue_position ?? null,
           data.video_eta_seconds ?? data.eta_seconds ?? null
         )
@@ -1445,6 +1484,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       // Poll for status. A dedicated, lighter endpoint exists for this; fall back
       // to the full listings list (today's original behaviour) if that endpoint
       // isn't live yet on the backend -- this frontend may ship before it does.
+      // (Signature has no such fallback: its status endpoint is part of the same release.)
       let useDedicatedStatus = true;
       const pollStartedAt = Date.now();
       // A queue wait of a few minutes is normal now, so we no longer give up at 5
@@ -1463,10 +1503,10 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         let updated = null;
         try {
           if (useDedicatedStatus) {
-            const pollRes = await fetch(`${API}/api/listings/${listing.id}/video-status`, {
+            const pollRes = await fetch(`${API}/api/listings/${listing.id}/${isSig ? 'signature-status' : 'video-status'}`, {
               headers: { Authorization: `Bearer ${token}` }
             });
-            if (pollRes.status === 404) {
+            if (pollRes.status === 404 && !isSig) {
               // Endpoint not deployed yet -- fall back for the rest of this poll.
               useDedicatedStatus = false;
             } else if (pollRes.ok) {
@@ -1485,17 +1525,28 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         }
         if (!updated) continue;
 
-        if (updated.video_status === 'done' && updated.video_url) {
+        // The two status endpoints name the same things differently.
+        const jobStatus = isSig ? updated.status : updated.video_status;
+        const finishedUrl = isSig ? updated.signature_video_url : updated.video_url;
+        const jobError = isSig ? updated.error : updated.video_error;
+
+        if (jobStatus === 'done' && finishedUrl) {
           // Read the finished job's notes BEFORE returning, or a fell-back-to-Auto pick is never shown.
-          noteFinishedVideo(listing.id, updated);
-          setListings(prev => prev.map(l => l.id === listing.id ? { ...l, video_url: updated.video_url, video_template_id: updated.video_template_id, video_status: 'done' } : l));
-          setVideoQueueMsg(m => ({ ...m, [listing.id]: '' }));
+          noteFinishedVideo(jobKey, updated);
+          setListings(prev => prev.map(l => l.id === listing.id
+            ? (isSig
+              ? { ...l, signature_video_url: finishedUrl }
+              : { ...l, video_url: finishedUrl, video_template_id: updated.video_template_id, video_status: 'done' })
+            : l));
+          // Show the film that just finished (only matters when both exist).
+          setVideoTier(v => ({ ...v, [listing.id]: isSig ? 'signature' : 'classic' }));
+          setVideoQueueMsg(m => ({ ...m, [jobKey]: '' }));
           return;
         }
-        if (updated.video_status === 'failed') {
-          setVideoQueueMsg(m => ({ ...m, [listing.id]: '' }));
-          setVideoPhotoNotes(n => ({ ...n, [listing.id]: [] })); // a failed render has no photo notes
-          throw new Error(updated.video_error || 'Video generation failed. Please try again.');
+        if (jobStatus === 'failed') {
+          setVideoQueueMsg(m => ({ ...m, [jobKey]: '' }));
+          setVideoPhotoNotes(n => ({ ...n, [jobKey]: [] })); // a failed render has no photo notes
+          throw new Error(jobError || (isSig ? 'Your Signature video could not be made. Please try again.' : 'Video generation failed. Please try again.'));
         }
 
         // Still queued or rendering. video_queue_position/video_eta_seconds are
@@ -1505,15 +1556,15 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         // exactly today's behaviour (just the button's own loading label).
         const queuePos = updated.video_queue_position ?? updated.queue_position ?? null;
         const etaSecs = updated.video_eta_seconds ?? updated.eta_seconds ?? null;
-        setVideoQueueMsg(m => ({ ...m, [listing.id]: describeVideoQueue(queuePos, etaSecs) }));
+        setVideoQueueMsg(m => ({ ...m, [jobKey]: describeVideoQueue(queuePos, etaSecs) }));
       }
 
       // Backstop reached. This is unusual, but -- deliberately -- not an error.
-      setVideoQueueMsg(m => ({ ...m, [listing.id]: "Still working on this one -- it may just be an unusually busy queue. Check back shortly." }));
+      setVideoQueueMsg(m => ({ ...m, [jobKey]: "Still working on this one -- it may just be an unusually busy queue. Check back shortly." }));
     } catch (err) {
-      setVideoError(e => ({ ...e, [listing.id]: err.message }));
+      setVideoError(e => ({ ...e, [jobKey]: err.message }));
     } finally {
-      setVideoLoading(v => ({ ...v, [listing.id]: false }));
+      setVideoLoading(v => ({ ...v, [jobKey]: false }));
     }
   };
 
@@ -2068,6 +2119,48 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const canWebShare = !!navigator.share;
   const activeListings = listings.filter(l => l.status !== 'archived');
   const deletedListings = listings.filter(l => l.status === 'archived');
+
+  // Signature: offered only when the server says this agent can use it (feature on AND a
+  // presenting clip recorded). Prefer the fresh profile read; fall back to the agent prop.
+  const agentNow = freshAgent || agent || {};
+  const sigAvailable = !signatureOff && !!agentNow.signature_available;
+  // No clip yet -> point them to My Profile. If they HAVE a clip but signature_available is
+  // false, the feature simply isn't switched on yet: say nothing.
+  const sigNeedsClip = !signatureOff && !agentNow.signature_available && !agentNow.presenter_video_url;
+  const sigVisible = sigAvailable || sigNeedsClip;
+
+  // Which film the player shows for a listing. Only listings with BOTH films have a choice.
+  const tierFor = (l) => (l.signature_video_url && l.video_url)
+    ? (videoTier[l.id] || 'signature')
+    : (l.signature_video_url ? 'signature' : 'classic');
+
+  const downloadButtonStyle = {
+    background: 'transparent',
+    border: '1px solid rgba(212,175,55,0.4)',
+    color: '#F0C84A',
+    padding: '10px 16px',
+    borderRadius: '3px',
+    fontSize: '12px',
+    fontFamily: "'Montserrat', sans-serif",
+    cursor: 'pointer'
+  };
+
+  // The note / queue / error lines for one video job (listing id = Classic, sigKey(id) = Signature).
+  const renderVideoMessages = (key) => (
+    <>
+      {(videoPhotoNotes[key] || []).length > 0 && (
+        <div role="status" style={{ color: '#F0C84A', fontSize: '12px', marginTop: '8px', lineHeight: 1.5 }}>
+          {videoPhotoNotes[key].map((t, i) => <div key={i}>ℹ {t}</div>)}
+        </div>
+      )}
+      {!videoError[key] && videoQueueMsg[key] && (
+        <div style={{ color: 'rgba(248,244,236,0.65)', fontSize: '12px', marginTop: '8px' }}>{videoQueueMsg[key]}</div>
+      )}
+      {videoError[key] && (
+        <div style={{ color: '#e08080', fontSize: '12px', marginTop: '8px' }}>{videoError[key]}</div>
+      )}
+    </>
+  );
 
   return (
     <div className="page-content">
@@ -2626,7 +2719,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                     <div key={i} style={{ color: 'rgba(240,200,74,0.85)', fontSize: '12px', marginTop: '8px' }}>{w}</div>
                   ))}
 
-                  {videoTemplates.length > 0 && !l.signature_video_url && (
+                  {videoTemplates.length > 0 && (
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '14px', marginBottom: '10px' }}>
                       {videoTemplates.map(t => {
                         const selected = selectedVideoTemplateFor(l) === t.id;
@@ -2653,15 +2746,20 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                     </div>
                   )}
 
-                  {l.video_url && (
+                  {(l.video_url || l.signature_video_url) && (
                     <div style={{ marginBottom: '10px' }}>
-                      {l.signature_video_url && (
+                      {l.signature_video_url && !l.video_url && (
+                        <div style={{ textAlign: 'center', color: 'rgba(248,244,236,0.6)', fontSize: '11px', marginBottom: '8px' }}>
+                          Your Signature video
+                        </div>
+                      )}
+                      {l.signature_video_url && l.video_url && (
                         <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', justifyContent: 'center' }}>
                           {[
                             { key: 'classic', label: 'Classic Video' },
                             { key: 'signature', label: 'Signature', premium: true }
                           ].map(t => {
-                            const active = (videoTier[l.id] || 'signature') === t.key;
+                            const active = tierFor(l) === t.key;
                             return (
                               <button
                                 key={t.key}
@@ -2705,8 +2803,8 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                       <div
                         style={{
                           width: '100%',
-                          maxWidth: (l.signature_video_url && (videoTier[l.id] || 'signature') === 'signature') ? '460px' : '320px',
-                          aspectRatio: (l.signature_video_url && (videoTier[l.id] || 'signature') === 'signature') ? '4 / 3' : '9 / 16',
+                          maxWidth: (tierFor(l) === 'signature' && sigShape[l.id] !== 'tall') ? '460px' : '320px',
+                          aspectRatio: (tierFor(l) === 'signature' && sigShape[l.id] !== 'tall') ? '4 / 3' : '9 / 16',
                           margin: '0 auto',
                           borderRadius: '4px',
                           border: '1px solid rgba(212,175,55,0.3)',
@@ -2715,12 +2813,15 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                         }}
                       >
                         <video
-                          key={l.signature_video_url ? `${l.id}-${videoTier[l.id] || 'signature'}` : l.id}
-                          src={
-                            l.signature_video_url && (videoTier[l.id] || 'signature') === 'signature'
-                              ? l.signature_video_url
-                              : l.video_url
-                          }
+                          key={`${l.id}-${tierFor(l)}`}
+                          src={tierFor(l) === 'signature' ? l.signature_video_url : l.video_url}
+                          onLoadedMetadata={(e) => {
+                            const v = e.currentTarget;
+                            if (tierFor(l) === 'signature' && v && v.videoWidth && v.videoHeight) {
+                              const shape = v.videoHeight > v.videoWidth ? 'tall' : 'wide';
+                              setSigShape(prev => (prev[l.id] === shape ? prev : { ...prev, [l.id]: shape }));
+                            }
+                          }}
                           controls
                           poster={l.images?.[getFeaturedIndex(l)]}
                           style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
@@ -2733,49 +2834,115 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                     mode={videoPhotoStateFor(l).mode}
                     urls={videoPhotoStateFor(l).urls}
                     onChange={(next) => handleVideoPhotoChange(l.id, next)}
-                    disabled={!!videoLoading[l.id]}
+                    disabled={!!videoLoading[l.id] || !!videoLoading[sigKey(l.id)]}
                   />
                   <MusicPicker
                     tracks={musicTracks}
                     value={effectiveMusicChoice}
                     onChange={handleMusicChange}
                     token={token}
-                    disabled={!!videoLoading[l.id]}
+                    disabled={!!videoLoading[l.id] || !!videoLoading[sigKey(l.id)]}
                   />
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                     <button
                       className="btn-primary"
-                      style={{ maxWidth: '220px' }}
+                      style={{ maxWidth: sigVisible ? '260px' : '220px' }}
                       onClick={() => handleGenerateVideo(l)}
                       disabled={videoLoading[l.id]}
                     >
                       {videoLoading[l.id]
                         ? (videoQueueMsg[l.id] ? 'Generating video...' : 'Generating video... (~1-2 min)')
-                        : l.video_url ? '🎬 Regenerate Video' : '🎬 Generate Video'}
+                        : l.video_url
+                          ? (sigVisible ? '🎬 Regenerate Classic Video' : '🎬 Regenerate Video')
+                          : (sigVisible ? '🎬 Generate Classic Video' : '🎬 Generate Video')}
                     </button>
                     {l.video_url && (
                       <button
                         type="button"
-                        onClick={() => {
-                          const isSig = l.signature_video_url && (videoTier[l.id] || 'signature') === 'signature';
-                          handleDownloadFile(isSig ? l.signature_video_url : l.video_url, `${l.id.slice(0, 8)}-${isSig ? 'signature' : 'classic'}.mp4`);
-                        }}
-                        style={{
-                          background: 'transparent',
-                          border: '1px solid rgba(212,175,55,0.4)',
-                          color: '#F0C84A',
-                          padding: '10px 16px',
-                          borderRadius: '3px',
-                          fontSize: '12px',
-                          fontFamily: "'Montserrat', sans-serif",
-                          cursor: 'pointer'
-                        }}
+                        onClick={() => handleDownloadFile(l.video_url, `${l.id.slice(0, 8)}-classic.mp4`)}
+                        style={downloadButtonStyle}
                       >
-                        ⬇ Download
+                        {sigVisible ? '⬇ Download Classic' : '⬇ Download'}
                       </button>
                     )}
                   </div>
-                  {l.video_url && (
+                  {sigVisible && (
+                    <div style={{ color: 'rgba(248,244,236,0.5)', fontSize: '11px', marginTop: '6px', lineHeight: 1.5 }}>
+                      Classic: your photos set to music, no clip of you.{l.video_url ? ' Regenerating replaces only your Classic video.' : ''}
+                    </div>
+                  )}
+                  {renderVideoMessages(l.id)}
+                  {sigAvailable && (
+                    <div style={{ marginTop: '14px', padding: '12px 14px', border: '1px solid rgba(212,175,55,0.5)', borderRadius: '4px', background: 'rgba(212,175,55,0.06)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '13px', color: '#F0C84A', fontWeight: 600, fontFamily: "'Montserrat', sans-serif" }}>Signature video</span>
+                        <span style={{
+                          fontSize: '9px',
+                          letterSpacing: '0.05em',
+                          color: '#0F2A22',
+                          background: '#D4AF37',
+                          borderRadius: '2px',
+                          padding: '2px 5px',
+                          fontWeight: 700
+                        }}>
+                          ★ PREMIUM
+                        </span>
+                      </div>
+                      <div style={{ color: 'rgba(248,244,236,0.65)', fontSize: '12px', lineHeight: 1.5, marginBottom: '10px' }}>
+                        The same film, but it opens with your short clip of you talking to the camera, with your voice over the music.
+                        It uses the photos and music you chose above. It is a separate video, so your Classic video stays exactly as it is.
+                        {l.signature_video_url ? ' Regenerating replaces only your Signature video.' : ''}
+                      </div>
+                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateVideo(l, 'signature')}
+                          disabled={!!videoLoading[sigKey(l.id)]}
+                          style={{
+                            maxWidth: '260px',
+                            padding: '14px 18px',
+                            background: 'transparent',
+                            color: '#F0C84A',
+                            border: '1px solid #D4AF37',
+                            borderRadius: '2px',
+                            cursor: videoLoading[sigKey(l.id)] ? 'not-allowed' : 'pointer',
+                            opacity: videoLoading[sigKey(l.id)] ? 0.6 : 1,
+                            fontFamily: "'Montserrat', sans-serif",
+                            fontSize: '12px',
+                            letterSpacing: '0.14em',
+                            textTransform: 'uppercase',
+                            fontWeight: 600
+                          }}
+                        >
+                          {videoLoading[sigKey(l.id)]
+                            ? 'Making your Signature...'
+                            : l.signature_video_url ? '★ Regenerate Signature' : '★ Generate Signature'}
+                        </button>
+                        {l.signature_video_url && (
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadFile(l.signature_video_url, `${l.id.slice(0, 8)}-signature.mp4`)}
+                            style={downloadButtonStyle}
+                          >
+                            ⬇ Download Signature
+                          </button>
+                        )}
+                      </div>
+                      {renderVideoMessages(sigKey(l.id))}
+                      {/presenting clip/i.test(String(videoError[sigKey(l.id)] || '')) && (
+                        <div style={{ fontSize: '12px', marginTop: '6px' }}>
+                          <a href="/my-profile" style={{ color: '#F0C84A' }}>Open My Profile</a>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {sigNeedsClip && (
+                    <div style={{ marginTop: '14px', padding: '10px 14px', border: '1px dashed rgba(212,175,55,0.4)', borderRadius: '4px', color: 'rgba(248,244,236,0.65)', fontSize: '12px', lineHeight: 1.5 }}>
+                      Want a Signature video, the one that opens with you talking to the camera? Record your short clip once in My Profile, then come back here.{' '}
+                      <a href="/my-profile" style={{ color: '#F0C84A' }}>Open My Profile</a>
+                    </div>
+                  )}
+                  {(l.video_url || l.signature_video_url) && (
                     <div style={{ marginTop: '14px' }}>
                       <button
                         type="button"
@@ -2874,17 +3041,6 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                         </div>
                       )}
                     </div>
-                  )}
-                  {(videoPhotoNotes[l.id] || []).length > 0 && (
-                    <div role="status" style={{ color: '#F0C84A', fontSize: '12px', marginTop: '8px', lineHeight: 1.5 }}>
-                      {videoPhotoNotes[l.id].map((t, i) => <div key={i}>ℹ {t}</div>)}
-                    </div>
-                  )}
-                  {!videoError[l.id] && videoQueueMsg[l.id] && (
-                    <div style={{ color: 'rgba(248,244,236,0.65)', fontSize: '12px', marginTop: '8px' }}>{videoQueueMsg[l.id]}</div>
-                  )}
-                  {videoError[l.id] && (
-                    <div style={{ color: '#e08080', fontSize: '12px', marginTop: '8px' }}>{videoError[l.id]}</div>
                   )}
                 </div>
 
