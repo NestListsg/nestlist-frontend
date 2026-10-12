@@ -2911,6 +2911,9 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                           ℹ You picked a new style above. Make a Classic video first, and your Signature will then follow that style.
                         </div>
                       )}
+                      <div style={{ color: '#F0C84A', fontSize: '12px', lineHeight: 1.5, marginBottom: '10px' }}>
+                        ℹ Heads up: any video you make here, Classic or Signature, also becomes the video buyers see at your listing link.
+                      </div>
                       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                         <button
                           type="button"
