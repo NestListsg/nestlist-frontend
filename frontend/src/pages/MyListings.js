@@ -999,6 +999,8 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     }
   };
 
+  const GENERIC_PHOTO_FALLBACK = 'Your photo choice could not be used, so this video was made with Auto photos instead.';
+
   // Builds the plain-language notes shown under the video buttons from a generate (or
   // status) response. `data` fields: video_photos_mode, video_photos_ignored, degradations.
   const noteVideoPhotos = (listingId, data, askedForCustom) => {
@@ -1010,11 +1012,42 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     });
     const ignored = Array.isArray(data.video_photos_ignored) ? data.video_photos_ignored.length : 0;
     if (askedForCustom && data.video_photos_mode === 'auto') {
-      add('Your photo choice could not be used, so this video was made with Auto photos instead.');
+      add(GENERIC_PHOTO_FALLBACK);
     } else if (ignored > 0 && notes.length === 0) {
       add(`${ignored} of the photos you picked are no longer on this listing and were left out of the video.`);
     }
     setVideoPhotoNotes(n => ({ ...n, [listingId]: notes }));
+  };
+
+  // The authoritative notes come with the FINISHED job (the `done` status poll):
+  // `photo_choice_note` is non-null only when the agent's photo pick was not honoured
+  // exactly (e.g. a photo was deleted after they pressed Generate), and `degradations`
+  // carries the same photo note alongside unrelated ones (e.g. music). Show them next to
+  // the finished video. Notes already shown from the enqueue response are kept (deduped),
+  // except the generic "could not be used" line, which the specific note replaces.
+  const noteFinishedVideo = (listingId, done) => {
+    const norm = (t) => String(t || '').trim().replace(/[.\s]+$/, '').toLowerCase();
+    const choice = typeof done.photo_choice_note === 'string' ? done.photo_choice_note.trim() : '';
+    const fromDone = [];
+    if (choice) fromDone.push(/^heads up/i.test(choice) ? choice : `Heads up: ${choice}${/[.!?]$/.test(choice) ? '' : '.'}`);
+    (Array.isArray(done.degradations) ? done.degradations : []).forEach(d => {
+      const t = typeof d === 'string' ? d : (d && (d.message || d.detail || d.note)) || '';
+      // The same photo text also appears inside degradations -- don't show it twice.
+      if (!(choice && norm(t) === norm(choice))) fromDone.push(t);
+    });
+    setVideoPhotoNotes(n => {
+      const out = [];
+      const seen = new Set();
+      const keepIfNew = (text) => {
+        const k = norm(text);
+        if (!k || seen.has(k)) return;
+        seen.add(k);
+        out.push(String(text).trim());
+      };
+      fromDone.forEach(keepIfNew);
+      (n[listingId] || []).filter(t => !(choice && t === GENERIC_PHOTO_FALLBACK)).forEach(keepIfNew);
+      return { ...n, [listingId]: out };
+    });
   };
 
   const handleGenerateVideo = async (listing) => {
@@ -1126,12 +1159,15 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         if (!updated) continue;
 
         if (updated.video_status === 'done' && updated.video_url) {
+          // Read the finished job's notes BEFORE returning, or a fell-back-to-Auto pick is never shown.
+          noteFinishedVideo(listing.id, updated);
           setListings(prev => prev.map(l => l.id === listing.id ? { ...l, video_url: updated.video_url, video_template_id: updated.video_template_id, video_status: 'done' } : l));
           setVideoQueueMsg(m => ({ ...m, [listing.id]: '' }));
           return;
         }
         if (updated.video_status === 'failed') {
           setVideoQueueMsg(m => ({ ...m, [listing.id]: '' }));
+          setVideoPhotoNotes(n => ({ ...n, [listing.id]: [] })); // a failed render has no photo notes
           throw new Error(updated.video_error || 'Video generation failed. Please try again.');
         }
 
@@ -1140,9 +1176,6 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         // that hasn't shipped the queue at all will report null for both, and
         // describeVideoQueue returns null for that, which clears this line back to
         // exactly today's behaviour (just the button's own loading label).
-        if (Array.isArray(updated.degradations) && updated.degradations.length) {
-          noteVideoPhotos(listing.id, updated, pickedPhotos.length > 0);
-        }
         const queuePos = updated.video_queue_position ?? updated.queue_position ?? null;
         const etaSecs = updated.video_eta_seconds ?? updated.eta_seconds ?? null;
         setVideoQueueMsg(m => ({ ...m, [listing.id]: describeVideoQueue(queuePos, etaSecs) }));
