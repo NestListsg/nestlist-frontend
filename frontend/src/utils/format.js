@@ -6,7 +6,8 @@ export function formatPriceM(price) {
   const num = parseFloat(String(price).replace(/,/g, ''));
   if (isNaN(num)) return price;
   // Under $1M reads as thousands ("880K"), never "0.88M".
-  if (num > 0 && num < 1_000_000) return `${Math.round(num / 1000)}K`;
+  // $999,500+ would round to "1000K", so it falls through to the millions path ("1M").
+  if (num > 0 && Math.round(num / 1000) < 1000 && num < 1_000_000) return `${Math.round(num / 1000)}K`;
   const millions = (num / 1_000_000).toFixed(2).replace(/\.?0+$/, '');
   return `${millions}M`;
 }
