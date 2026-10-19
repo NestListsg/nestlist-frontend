@@ -139,7 +139,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         district: editingListing.district ? String(editingListing.district) : '',
         land_size: editingListing.land_size || 0,
         built_up: editingListing.built_up || 0,
-        bedrooms: editingListing.bedrooms || '',
+        bedrooms: (editingListing.bedrooms || editingListing.bedrooms === 0) ? String(editingListing.bedrooms) : '',
         bathrooms: editingListing.bathrooms || '',
         price: editingListing.price ? fullNumberToMillions(editingListing.price) : '',
         features: editingListing.features || '',
@@ -1293,7 +1293,20 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
             </div>
             <div className="form-group">
               <label className="form-label">Bedrooms</label>
-              <input className="form-input" value={form.bedrooms} onChange={e => set('bedrooms', e.target.value)} placeholder="e.g. 4" required />
+              {!showLandFields ? (
+                // Condo-family only: "Studio" is a real answer. It is sent as 0 and
+                // shown as "Studio" everywhere; landed listings keep the plain input.
+                <select className="form-input" value={form.bedrooms} onChange={e => set('bedrooms', e.target.value)} required>
+                  <option value="">Select...</option>
+                  <option value="0">Studio</option>
+                  {['1', '2', '3', '4', '5', '6'].map(n => <option key={n} value={n}>{n}</option>)}
+                  {form.bedrooms && !['', '0', '1', '2', '3', '4', '5', '6'].includes(String(form.bedrooms)) && (
+                    <option value={form.bedrooms}>{form.bedrooms}</option>
+                  )}
+                </select>
+              ) : (
+                <input className="form-input" value={form.bedrooms} onChange={e => set('bedrooms', e.target.value)} placeholder="e.g. 4" required />
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">Bathrooms</label>

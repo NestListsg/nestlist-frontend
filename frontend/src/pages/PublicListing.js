@@ -163,7 +163,7 @@ export default function PublicListing() {
 
       {(listing.bedrooms || listing.land_size > 0 || listing.built_up > 0 || publicTenure || publicFloor) && (
         <div style={{ display: 'flex', gap: '20px', marginBottom: '24px', fontSize: '13px', color: 'var(--cream-dim)', flexWrap: 'wrap' }}>
-          {listing.bedrooms && <div>{listing.bedrooms}</div>}
+          {listing.bedrooms && <div>{String(listing.bedrooms).trim() === '0' ? (isCondoOnly(listing) ? 'Studio' : null) : listing.bedrooms}</div>}
           {listing.land_size > 0 && <div>Land: {listing.land_size.toLocaleString()} sqft</div>}
           {listing.built_up > 0 && <div>{isCondoOnly(listing) ? 'Floor area' : 'Built-up'}: {listing.built_up.toLocaleString()} sqft</div>}
           {publicTenure && <div>{publicTenure}</div>}

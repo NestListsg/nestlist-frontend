@@ -5,6 +5,8 @@ export function formatPriceM(price) {
   if (price === null || price === undefined || price === '') return price;
   const num = parseFloat(String(price).replace(/,/g, ''));
   if (isNaN(num)) return price;
+  // Under $1M reads as thousands ("880K"), never "0.88M".
+  if (num > 0 && num < 1_000_000) return `${Math.round(num / 1000)}K`;
   const millions = (num / 1_000_000).toFixed(2).replace(/\.?0+$/, '');
   return `${millions}M`;
 }
@@ -36,8 +38,10 @@ export function millionsToFullNumber(value) {
 
 export function fullNumberToMillions(value) {
   if (!value) return '';
-  const formatted = formatPriceM(value);
-  return formatted.endsWith('M') ? formatted.slice(0, -1) : formatted;
+  const num = parseFloat(String(value).replace(/,/g, ''));
+  if (isNaN(num)) return value;
+  // Always millions here (form fields are entered in millions), so 880000 -> "0.88".
+  return (num / 1_000_000).toFixed(2).replace(/\.?0+$/, '');
 }
 
 // Strips a leading block/house number ("22G Tembeling Road" -> "Tembeling

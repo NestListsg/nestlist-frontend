@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { formatPriceM, formatPriceDisplay, maskPrice } from '../utils/format';
 import { genUploadSession } from '../utils/uploadSession';
-import { listingWing } from '../utils/propertyTypes';
+import { listingWing, isCondoOnly } from '../utils/propertyTypes';
 import MatchingBuyers from '../components/MatchingBuyers';
 import MusicPicker, { MUSIC_AUTO } from '../components/MusicPicker';
 import VideoPhotoPicker, { VIDEO_PHOTO_MAX } from '../components/VideoPhotoPicker';
@@ -117,13 +117,22 @@ function buildLinkedInInsightCaption(listing, agent, marketPulse) {
 
   const signOff = [agent?.name, agent?.contact, agent?.agency].filter(Boolean).join('\n');
 
+  // Open Data Licence: the URA-derived figures above must carry the source
+  // notice wherever they are shown (same wording as UraSourceNotice). Only
+  // added when the figures are actually quoted.
+  const trimStr = v => (typeof v === 'string' ? v.trim() : '');
+  const licenceUrl = /^https:\/\//i.test(trimStr(mp.source_licence_url)) ? trimStr(mp.source_licence_url) : 'https://data.gov.sg/open-data-licence';
+  const sourceNotice = hasGcbData
+    ? `\n\nSource: ${trimStr(mp.source_attribution) || 'Contains information from the URA Data Service, made available under the Singapore Open Data Licence.'} ${licenceUrl}. ${trimStr(mp.source_disclaimer) || 'Indicative only; verify with official records.'}`
+    : '';
+
   return `Singapore's landed property market — a quick read for ${period}
 
 ${marketLine}
 
 Against that backdrop, I'm currently representing a ${propertyContext}${listing.features ? ` — ${listing.features}` : ''}. Always glad to share more on where the landed market is heading, or hear what you're considering — no pressure either way.
 
-${signOff}`;
+${signOff}${sourceNotice}`;
 }
 
 // Prefers the new short, memorable link (nestlist.sg/{agentHandle}/{listingCode})
@@ -168,6 +177,9 @@ function formatBathroomsBullet(listing) {
 // asked", never a real fact, so it must never render. Only a real positive
 // count renders.
 function formatBedroomsBullet(listing) {
+  // Condo-family-only listings: an explicit "0" is a Studio unit (the form
+  // sends 0 for it), a real fact. Landed listings keep the rule below.
+  if (isCondoOnly(listing) && String(listing.bedrooms).trim() === '0') return 'Studio';
   const n = Number(listing.bedrooms);
   if (!Number.isFinite(n) || n <= 0) return null;
   return `${listing.bedrooms} Bedroom${String(listing.bedrooms) === '1' ? '' : 's'}`;
