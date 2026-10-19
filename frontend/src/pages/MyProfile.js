@@ -50,6 +50,17 @@ export default function MyProfile({ agent, token, onUpdate }) {
   const [emailError, setEmailError] = useState('');
   const [emailSuccess, setEmailSuccess] = useState('');
   const [showEmailPassword, setShowEmailPassword] = useState(false);
+  // CEA details (shown on condo-family listings only). Saved on their own with
+  // PATCH, so saving them can never touch the rest of the profile, and a blank
+  // value clears the field.
+  const [cea, setCea] = useState({
+    cea_reg_no: agent.cea_reg_no || '',
+    agency_name: agent.agency_name || '',
+    agency_licence_no: agent.agency_licence_no || ''
+  });
+  const [ceaSaving, setCeaSaving] = useState(false);
+  const [ceaError, setCeaError] = useState('');
+  const [ceaSuccess, setCeaSuccess] = useState('');
   const handlePickerRef = useRef(null);
   const [handleSaving, setHandleSaving] = useState(false);
   const [handleError, setHandleError] = useState('');
@@ -71,6 +82,16 @@ export default function MyProfile({ agent, token, onUpdate }) {
       .catch(() => setPosterTemplates([]));
   }, [token]);
 
+  // The profile may finish refreshing after this page opens; keep the CEA boxes
+  // in step with it so a stale blank is never what the agent sees (or saves).
+  useEffect(() => {
+    setCea({
+      cea_reg_no: agent.cea_reg_no || '',
+      agency_name: agent.agency_name || '',
+      agency_licence_no: agent.agency_licence_no || ''
+    });
+  }, [agent.cea_reg_no, agent.agency_name, agent.agency_licence_no]);
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSave = async (e) => {
@@ -90,6 +111,37 @@ export default function MyProfile({ agent, token, onUpdate }) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveCea = async () => {
+    setCeaSaving(true); setCeaError(''); setCeaSuccess('');
+    try {
+      const res = await fetch(`${API}/api/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          cea_reg_no: cea.cea_reg_no.trim(),
+          agency_name: cea.agency_name.trim(),
+          agency_licence_no: cea.agency_licence_no.trim()
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const d = data && data.detail;
+        throw new Error(typeof d === 'string' && d.trim() ? d : 'Could not save your CEA details. Please try again.');
+      }
+      onUpdate(data);
+      setCea({
+        cea_reg_no: data.cea_reg_no || '',
+        agency_name: data.agency_name || '',
+        agency_licence_no: data.agency_licence_no || ''
+      });
+      setCeaSuccess('CEA details saved.');
+    } catch (err) {
+      setCeaError(err.message);
+    } finally {
+      setCeaSaving(false);
     }
   };
 
@@ -596,6 +648,34 @@ export default function MyProfile({ agent, token, onUpdate }) {
             </div>
           </div>
         )}
+
+        <div className="divider" />
+        <div className="section-label">CEA Details (for condo, EC and apartment listings)</div>
+        <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '10px' }}>
+          CEA requires these on property advertisements. They appear on your condo-family captions, write-ups, posters and buyer pages - never on landed listings.
+        </div>
+        {agent.cea_details_supported === false && (
+          <div className="error-msg" style={{ marginBottom: '10px' }}>CEA details can't be saved just yet - please try again later.</div>
+        )}
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">CEA Registration No.</label>
+            <input className="form-input" value={cea.cea_reg_no} maxLength={20} placeholder="e.g. R123456A" onChange={e => setCea(c => ({ ...c, cea_reg_no: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Agency Name</label>
+            <input className="form-input" value={cea.agency_name} maxLength={120} onChange={e => setCea(c => ({ ...c, agency_name: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Agency Licence No.</label>
+            <input className="form-input" value={cea.agency_licence_no} maxLength={20} placeholder="e.g. L1234567A" onChange={e => setCea(c => ({ ...c, agency_licence_no: e.target.value }))} />
+          </div>
+        </div>
+        <button type="button" className="btn-gold" style={{ maxWidth: '220px' }} onClick={handleSaveCea} disabled={ceaSaving || agent.cea_details_supported === false}>
+          {ceaSaving ? <><span className="spinner" />Saving...</> : 'Save CEA Details'}
+        </button>
+        {ceaError && <div className="error-msg" style={{ marginTop: '8px' }}>{ceaError}</div>}
+        {ceaSuccess && <div className="success-msg" style={{ marginTop: '8px' }}>{ceaSuccess}</div>}
 
         <div className="divider" />
         <div className="section-label">Account Email</div>

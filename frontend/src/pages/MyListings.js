@@ -190,8 +190,8 @@ function formatBedroomsBullet(listing) {
 // utils/propertyTypes.js). PRESTIGE sets are exactly what every landed listing
 // has always had. HOME sets (condo family + a neutral fallback) are
 // content-studio's NestList Home spec (content/nestlist-home-condo-copy-spec.md
-// section 1.2): no landed or luxury words, no return/price-promise tags, never
-// the project name. A blank/unrecognised type gets the neutral Home set --
+// section 1.2): no landed or luxury words, no return/price-promise tags (the
+// project name is public by default, so no hashtag needs it). A blank/unrecognised type gets the neutral Home set --
 // never the Prestige one.
 // ---------------------------------------------------------------------------
 const PRESTIGE_TAGS = {
@@ -299,6 +299,62 @@ function homeNoun(listing, wing) {
   return listing.property_type ? listing.property_type.toLowerCase() : 'home';
 }
 
+// ---------------------------------------------------------------------------
+// NestList Home (condo family) rules, per Jane:
+//  - The project name is PUBLIC unless the agent ticks "Hide project name from
+//    public posts" (hide_project_name). A unit number is never shown.
+//  - Condo prices are shown OPENLY (no masking), with the agent's optional
+//    label. Landed keeps the masked price.
+//  - Condo-only captions end with the agent's CEA block. Landed captions NEVER
+//    carry the registration or licence numbers.
+//  - EC buyer eligibility is only ever quoted from the agent's own choice.
+// ---------------------------------------------------------------------------
+const CEA_FIELDS = ['cea_reg_no', 'agency_name', 'agency_licence_no'];
+
+function ceaMissingFields(agent) {
+  return CEA_FIELDS.filter(f => !String((agent && agent[f]) || '').trim());
+}
+
+// "Name | phone", "CEA Reg No: ...", "Agency: ... (Licence No: ...)". Empty when
+// any CEA detail is missing -- never half a block.
+function buildCeaBlock(agent) {
+  if (!agent || ceaMissingFields(agent).length) return '';
+  const first = [agent.name, agent.contact].map(x => String(x || '').trim()).filter(Boolean).join(' | ');
+  return [
+    first,
+    `CEA Reg No: ${String(agent.cea_reg_no).trim()}`,
+    `Agency: ${String(agent.agency_name).trim()} (Licence No: ${String(agent.agency_licence_no).trim()})`
+  ].filter(Boolean).join('\n');
+}
+
+// "SGD 1.5M (Negotiable)", "From SGD 1.5M", "SGD 1.5M · View to Offer".
+function priceWithLabel(price, label) {
+  const amount = formatPriceDisplay(price);
+  if (!amount) return label === 'View to Offer' ? 'View to Offer' : null;
+  if (label === 'From') return `From SGD ${amount}`;
+  if (label === 'Negotiable') return `SGD ${amount} (Negotiable)`;
+  if (label === 'View to Offer') return `SGD ${amount} · View to Offer`;
+  return `SGD ${amount}`;
+}
+
+// Quoted only from the listing's own ec_eligibility, only for an EC.
+function ecEligibilityLine(listing, wing) {
+  if (wing !== 'ec') return null;
+  if (listing.ec_eligibility === 'citizens_prs') return 'Eligibility: Singapore Citizens and PRs only';
+  if (listing.ec_eligibility === 'all_buyers') return 'Eligibility: open to all buyers, including foreigners';
+  return null;
+}
+
+// "The Marq, District 9" -- the project (when public) plus the district.
+function publicLocationText(listing, projectLabel) {
+  return [projectLabel, listing.district_label].filter(Boolean).join(', ');
+}
+
+function publicProjectLabel(listing) {
+  if (!isCondoOnly(listing) || listing.hide_project_name === true) return '';
+  return String(listing.project_name || '').trim();
+}
+
 // LinkedIn for a Home-wing listing. The Prestige version is a GCB market
 // read, which would be the wrong story for a condo -- and there is no condo
 // market figure on the Market Pulse panel to ground one in, so this stays a
@@ -306,21 +362,27 @@ function homeNoun(listing, wing) {
 function buildLinkedInHomeCaption(listing, wing, agent) {
   const noun = homeNoun(listing, wing);
   const article = /^[aeiou]/i.test(noun) ? 'an' : 'a';
+  const projectLabel = publicProjectLabel(listing);
   const where = listing.district_label ? ` in ${listing.district_label}` : '';
-  const signOff = [agent?.name, agent?.contact, agent?.agency].filter(Boolean).join('\n');
+  // Condo-only listings sign off with the CEA block (name, phone, CEA Reg No,
+  // agency + licence); anything else keeps the plain sign-off.
+  const signOff = (isCondoOnly(listing) && buildCeaBlock(agent))
+    || [agent?.name, agent?.contact, agent?.agency].filter(Boolean).join('\n');
+  const priceText = isCondoOnly(listing) ? priceWithLabel(listing.price, listing.price_label) : null;
   return captionBlock(
     'New listing',
     '',
-    `I'm currently representing ${article} ${noun}${where}${listing.features ? ` — ${listing.features}` : ''}. Glad to share more or arrange a viewing if it might suit you or someone you know — no pressure either way.`,
+    `I'm currently representing ${article} ${noun}${projectLabel ? ` (${projectLabel})` : ''}${where}${listing.features ? ` — ${listing.features}` : ''}.${priceText ? ` ${priceText}.` : ''} Glad to share more or arrange a viewing if it might suit you or someone you know — no pressure either way.`,
+    ecEligibilityLine(listing, wing),
     '',
     signOff || null
   );
 }
 
-// The project name is agent-only (the form promises it never reaches a
-// caption), but an agent may also type it into Special Features or hand-edit
-// it into the write-up. Every caption therefore works from a copy whose
-// features/content have it swapped for the district -- with any number in
+// When the project name must stay out of public posts (landed/mixed listings,
+// or a condo the agent chose to hide), an agent may still type it into Special
+// Features or hand-edit it into the write-up. Those captions work from a copy
+// whose features/content have it swapped for the district -- with any number in
 // front of it ("26 Newton") going too, so it can never read "26 District 11".
 // Whole-word, case-insensitive. Mirrors the backend's buyer-page scrub
 // (_scrub_project_name), but stricter: names of 4+ characters are scrubbed
@@ -342,8 +404,21 @@ function scrubProjectName(text, listing) {
   }
 }
 
+// Condo-only captions end with the CEA block (every platform; LinkedIn builds
+// its own sign-off with it). PropertyGuru's character limit leaves room for it.
 function generateCaption(rawListing, platform, style, pgLimit, agent, marketPulse) {
-  const listing = (rawListing && rawListing.project_name)
+  const ceaBlock = (rawListing && isCondoOnly(rawListing) && platform !== 'linkedin') ? buildCeaBlock(agent) : '';
+  if (!ceaBlock) return generateCaptionCore(rawListing, platform, style, pgLimit, agent, marketPulse);
+  const limit = platform === 'propertyguru'
+    ? Math.max(0, (pgLimit || PROPERTYGURU_CHAR_LIMIT) - ceaBlock.length - 2)
+    : pgLimit;
+  return `${generateCaptionCore(rawListing, platform, style, limit, agent, marketPulse)}\n\n${ceaBlock}`;
+}
+
+function generateCaptionCore(rawListing, platform, style, pgLimit, agent, marketPulse) {
+  // The project name is scrubbed from the free text unless this is a condo-only
+  // listing whose agent has left it public (publicProjectLabel).
+  const listing = (rawListing && rawListing.project_name && !publicProjectLabel(rawListing))
     ? { ...rawListing, features: scrubProjectName(rawListing.features, rawListing), content: scrubProjectName(rawListing.content, rawListing) }
     : rawListing;
   const wing = listingWing(listing);
@@ -353,14 +428,21 @@ function generateCaption(rawListing, platform, style, pgLimit, agent, marketPuls
   }
 
   // The raw street never appears in generated copy shown to buyers, on any
-  // platform -- captions below use only the district ("hide the road"). The
-  // same goes for a condo's project name: it is agent-only, never read here.
+  // platform -- captions below use only the district ("hide the road"). A
+  // condo's project name IS used (it is public unless the agent hid it); a
+  // unit number never appears.
   // Exact price is a different rule per platform: PropertyGuru is an actual
   // portal listing field (not a caption) and keeps the real price, while the
   // FB/IG/WhatsApp/TikTok teaser captions below use maskedPrice (the
   // "$X.XXM" / "$8XXK" convention) at most once each, per the caption copy rules.
-  const displayLocation = listing.district_label || '';
-  const maskedPrice = maskPrice(listing.price);
+  const projectLabel = publicProjectLabel(listing);
+  const locationText = publicLocationText(listing, projectLabel);
+  const condoOnly = isCondoOnly(listing);
+  // Condo-only: the price is shown openly (with the agent's label). Landed:
+  // masked, as before.
+  const condoPrice = condoOnly ? priceWithLabel(listing.price, listing.price_label) : null;
+  const maskedPrice = condoOnly ? '' : maskPrice(listing.price);
+  const eligLine = ecEligibilityLine(listing, wing);
   const type = listing.property_type || '';
 
   const listingUrl = buildListingUrl(listing);
@@ -385,7 +467,7 @@ function generateCaption(rawListing, platform, style, pgLimit, agent, marketPuls
   const floorLevel = String(listing.floor_level || '').trim();
   const bulletLines = [
     type,
-    displayLocation,
+    locationText,
     listing.land_size ? `${listing.land_size.toLocaleString()} sqft land` : null,
     listing.built_up ? `${listing.built_up.toLocaleString()} sqft${isHome ? '' : ' built-up'}` : null,
     formatBedroomsBullet(listing),
@@ -409,8 +491,8 @@ function generateCaption(rawListing, platform, style, pgLimit, agent, marketPuls
   // whatever text that style produced to the selected character limit.
   if (platform === 'propertyguru') {
     const limit = pgLimit || PROPERTYGURU_CHAR_LIMIT;
-    const pgPrice = formatPriceDisplay(listing.price);
-    const headerLine = joinParts([type, displayLocation, pgPrice ? `SGD ${pgPrice}` : null]);
+    const pgPrice = priceWithLabel(listing.price, listing.price_label);
+    const headerLine = joinParts([type, locationText, pgPrice, eligLine]);
     const header = headerLine ? `${headerLine}\n\n` : '';
     let source;
     if (style === 'tldr') source = bullets;
@@ -419,9 +501,11 @@ function generateCaption(rawListing, platform, style, pgLimit, agent, marketPuls
     return header + truncateToLimit(source, Math.max(0, limit - header.length));
   }
 
-  const priceRow = maskedPrice ? `💰 ${maskedPrice}` : null;
-  const locationRow = displayLocation ? `📍 ${displayLocation}` : null;
-  const typeHeader = joinParts([type, displayLocation]);
+  const priceRow = condoOnly
+    ? (condoPrice ? `💰 ${condoPrice}` : null)
+    : (maskedPrice ? `💰 ${maskedPrice}` : null);
+  const locationRow = locationText ? `📍 ${locationText}` : null;
+  const typeHeader = joinParts([type, locationText]);
   // "Private viewing" is the Prestige register; Home keeps plain "viewing".
   const viewing = isHome ? 'a viewing' : 'a private viewing';
   const waType = type ? `*${type}*` : null;
@@ -434,6 +518,7 @@ function generateCaption(rawListing, platform, style, pgLimit, agent, marketPuls
     facebook: captionBlock(
       typeHeader ? `🏡 ${typeHeader}` : null,
       priceRow,
+      eligLine,
       '',
       bullets,
       '',
@@ -446,6 +531,7 @@ function generateCaption(rawListing, platform, style, pgLimit, agent, marketPuls
       type ? `🏡 ${type}` : null,
       locationRow,
       priceRow,
+      eligLine,
       '',
       bullets,
       '',
@@ -460,6 +546,7 @@ function generateCaption(rawListing, platform, style, pgLimit, agent, marketPuls
       waType,
       locationRow,
       priceRow,
+      eligLine,
       '',
       bullets,
       '',
@@ -472,6 +559,7 @@ function generateCaption(rawListing, platform, style, pgLimit, agent, marketPuls
       type ? `🏡 NEW LISTING | ${type}` : '🏡 NEW LISTING',
       locationRow,
       priceRow,
+      eligLine,
       '',
       body ? `${body}...` : null,
       '',
@@ -485,6 +573,7 @@ function generateCaption(rawListing, platform, style, pgLimit, agent, marketPuls
       '',
       locationRow,
       priceRow,
+      eligLine,
       '',
       shortBody ? `${shortBody}...` : null,
       '',
@@ -499,6 +588,7 @@ function generateCaption(rawListing, platform, style, pgLimit, agent, marketPuls
       waType,
       locationRow,
       priceRow,
+      eligLine,
       '',
       listing.content ? `${listing.content.slice(0, 400)}...` : null,
       '',
@@ -513,6 +603,7 @@ function generateCaption(rawListing, platform, style, pgLimit, agent, marketPuls
       type ? `🏡 NEW LISTING | ${type}` : '🏡 NEW LISTING',
       locationRow,
       priceRow,
+      eligLine,
       '',
       '⚡ AT A GLANCE',
       bullets,
@@ -529,6 +620,7 @@ function generateCaption(rawListing, platform, style, pgLimit, agent, marketPuls
       type ? `🏡 ${type}` : null,
       locationRow,
       priceRow,
+      eligLine,
       '',
       '⚡ AT A GLANCE',
       bullets,
@@ -547,6 +639,7 @@ function generateCaption(rawListing, platform, style, pgLimit, agent, marketPuls
       waType,
       locationRow,
       priceRow,
+      eligLine,
       '',
       '⚡ AT A GLANCE',
       bullets,
@@ -565,11 +658,12 @@ function generateCaption(rawListing, platform, style, pgLimit, agent, marketPuls
       ? (listing.built_up ? `${listing.built_up.toLocaleString()} sqft` : null)
       : (listing.land_size ? `${listing.land_size.toLocaleString()} sqft` : null);
     const factsLine = joinParts([sizePart, formatBedroomsBullet(listing)]);
-    const opener = [type, displayLocation ? `in ${displayLocation}` : ''].filter(Boolean).join(' ');
+    const opener = [type, locationText ? `in ${locationText}` : ''].filter(Boolean).join(' ');
     return captionBlock(
       opener ? `${opener} 🏡` : '🏡',
-      maskedPrice || null,
+      (condoOnly ? condoPrice : maskedPrice) || null,
       factsLine || null,
+      eligLine,
       'Upload your property video and use this caption 👆',
       'DM to arrange viewing 🔑',
       '',
@@ -735,6 +829,10 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   // What the last generate actually did with the pick, listingId -> [plain-language notes].
   const [videoPhotoNotes, setVideoPhotoNotes] = useState({});
   const [marketPulse, setMarketPulse] = useState(null);
+  // Listings whose last post was refused for missing owner consent (409): the
+  // error text comes from the backend; this adds a one-click way to fix it.
+  const [consentBlocked, setConsentBlocked] = useState({});
+  const [posterWarnings, setPosterWarnings] = useState({});
   // Music for generated videos. musicTracks comes from GET /api/music-tracks (empty =
   // picker hidden); musicChoice is the agent's pick ('auto' or a track id), shared by
   // every listing card since it's a taste preference, not a per-listing setting.
@@ -1153,6 +1251,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed to generate poster');
+      setPosterWarnings(w => ({ ...w, [listing.id]: Array.isArray(data.warnings) ? data.warnings.filter(x => typeof x === 'string' && x.trim()) : [] }));
       setListings(prev => prev.map(l => l.id === listing.id ? { ...l, poster_url: data.poster_url, poster_template_id: data.poster_template_id } : l));
     } catch (err) {
       setPosterError(e => ({ ...e, [listing.id]: err.message }));
@@ -1874,7 +1973,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   };
 
   const handlePostInstagram = async (listing) => {
-    const caption = igCaption[listing.id] ?? generateCaption(listing, 'instagram', getCaptionStyle(listing.id));
+    const caption = igCaption[listing.id] ?? generateCaption(listing, 'instagram', getCaptionStyle(listing.id), null, agent);
     setIgPosting(p => ({ ...p, [listing.id]: true }));
     setIgPostError(e => ({ ...e, [listing.id]: '' }));
     setIgPostSuccess(s => ({ ...s, [listing.id]: '' }));
@@ -1884,7 +1983,8 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ caption })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      setConsentBlocked(c => ({ ...c, [listing.id]: res.status === 409 && /consent/i.test(String(data.detail || '')) }));
       if (!res.ok) throw new Error(data.detail || 'Failed to post to Instagram');
       setIgPostSuccess(s => ({ ...s, [listing.id]: '🚀 Posted to Instagram!' }));
     } catch (err) {
@@ -1895,7 +1995,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   };
 
   const handlePostFacebook = async (listing) => {
-    const caption = fbCaption[listing.id] ?? generateCaption(listing, 'facebook', getCaptionStyle(listing.id));
+    const caption = fbCaption[listing.id] ?? generateCaption(listing, 'facebook', getCaptionStyle(listing.id), null, agent);
     setFbPosting(p => ({ ...p, [listing.id]: true }));
     setFbPostError(e => ({ ...e, [listing.id]: '' }));
     setFbPostSuccess(s => ({ ...s, [listing.id]: '' }));
@@ -1905,7 +2005,8 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ caption })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      setConsentBlocked(c => ({ ...c, [listing.id]: res.status === 409 && /consent/i.test(String(data.detail || '')) }));
       if (!res.ok) throw new Error(data.detail || 'Failed to post to Facebook');
       setFbPostSuccess(s => ({ ...s, [listing.id]: '🚀 Posted to Facebook!' }));
     } catch (err) {
@@ -1926,7 +2027,8 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ caption })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      setConsentBlocked(c => ({ ...c, [listing.id]: res.status === 409 && /consent/i.test(String(data.detail || '')) }));
       if (!res.ok) throw new Error(data.detail || 'Failed to post to LinkedIn');
       setLiPostSuccess(s => ({ ...s, [listing.id]: '🚀 Posted to LinkedIn!' }));
     } catch (err) {
@@ -2368,6 +2470,11 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                 padding: '16px'
               }}>
                 <div className="section-label" style={{ marginBottom: '4px' }}>📲 Share This Listing</div>
+                {isCondoOnly(l) && ceaMissingFields(agent).length > 0 && (
+                  <div style={{ fontSize: '12px', color: 'rgba(240,200,74,0.9)', background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.3)', borderRadius: '4px', padding: '8px 12px', marginBottom: '10px' }}>
+                    Your CEA details are incomplete, so this listing's captions, poster and video will go out without them. CEA requires them on property advertisements - <a href="/my-profile" style={{ color: '#F0C84A' }}>add them in My Profile</a>.
+                  </div>
+                )}
                 <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '10px' }}>
                   Select a platform and caption style. Copy and paste directly into your own account.
                 </div>
@@ -2380,6 +2487,11 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                   paddingBottom: '16px',
                   borderBottom: '1px solid rgba(212,175,55,0.15)'
                 }}>
+                  {isCondoOnly(l) && ceaMissingFields(agent).length > 0 && (
+                    <div style={{ fontSize: '12px', color: 'rgba(240,200,74,0.9)', background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.3)', borderRadius: '4px', padding: '8px 12px', marginBottom: '10px' }}>
+                      Your CEA details are incomplete, so this listing's captions, poster and video will go out without them. CEA requires them on property advertisements - <a href="/my-profile" style={{ color: '#F0C84A' }}>add them in My Profile</a>.
+                    </div>
+                  )}
                   <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginBottom: '10px' }}>
                     Branded poster for your post/story. Click a photo above (marked ★ FEATURED) to choose the background — the same photo is also used as the video's background below.
                   </div>
@@ -2505,6 +2617,9 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                   {posterError[l.id] && (
                     <div style={{ color: '#e08080', fontSize: '12px', marginTop: '8px' }}>{posterError[l.id]}</div>
                   )}
+                  {(posterWarnings[l.id] || []).map((w, i) => (
+                    <div key={i} style={{ color: 'rgba(240,200,74,0.85)', fontSize: '12px', marginTop: '8px' }}>{w}</div>
+                  ))}
 
                   {videoTemplates.length > 0 && !l.signature_video_url && (
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '14px', marginBottom: '10px' }}>
@@ -3027,7 +3142,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                         <textarea
                           className="form-textarea"
                           rows={4}
-                          value={igCaption[l.id] ?? generateCaption(l, 'instagram', getCaptionStyle(l.id))}
+                          value={igCaption[l.id] ?? generateCaption(l, 'instagram', getCaptionStyle(l.id), null, agent)}
                           onChange={e => setIgCaption(c => ({ ...c, [l.id]: e.target.value }))}
                         />
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px', flexWrap: 'wrap' }}>
@@ -3045,6 +3160,11 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                           )}
                         </div>
                         {igPostError[l.id] && <div className="error-msg">{igPostError[l.id]}</div>}
+                        {consentBlocked[l.id] && (
+                          <button type="button" className="btn-gold" style={{ marginTop: '6px', maxWidth: '220px' }} onClick={() => onEdit && onEdit(l)}>
+                            Edit this listing
+                          </button>
+                        )}
                         {igPostSuccess[l.id] && <div className="success-msg">{igPostSuccess[l.id]}</div>}
                       </div>
                     )}
@@ -3055,7 +3175,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                         <textarea
                           className="form-textarea"
                           rows={4}
-                          value={fbCaption[l.id] ?? generateCaption(l, 'facebook', getCaptionStyle(l.id))}
+                          value={fbCaption[l.id] ?? generateCaption(l, 'facebook', getCaptionStyle(l.id), null, agent)}
                           onChange={e => setFbCaption(c => ({ ...c, [l.id]: e.target.value }))}
                         />
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px', flexWrap: 'wrap' }}>
@@ -3073,6 +3193,11 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                           )}
                         </div>
                         {fbPostError[l.id] && <div className="error-msg">{fbPostError[l.id]}</div>}
+                        {consentBlocked[l.id] && (
+                          <button type="button" className="btn-gold" style={{ marginTop: '6px', maxWidth: '220px' }} onClick={() => onEdit && onEdit(l)}>
+                            Edit this listing
+                          </button>
+                        )}
                         {fbPostSuccess[l.id] && <div className="success-msg">{fbPostSuccess[l.id]}</div>}
                       </div>
                     )}
@@ -3101,6 +3226,11 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                           )}
                         </div>
                         {liPostError[l.id] && <div className="error-msg">{liPostError[l.id]}</div>}
+                        {consentBlocked[l.id] && (
+                          <button type="button" className="btn-gold" style={{ marginTop: '6px', maxWidth: '220px' }} onClick={() => onEdit && onEdit(l)}>
+                            Edit this listing
+                          </button>
+                        )}
                         {liPostSuccess[l.id] && <div className="success-msg">{liPostSuccess[l.id]}</div>}
                       </div>
                     )}

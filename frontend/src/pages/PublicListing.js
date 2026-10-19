@@ -6,6 +6,21 @@ import { isCondoOnly } from '../utils/propertyTypes';
 const API = process.env.REACT_APP_API_URL || '';
 const LOGO = '/logo_2.png';
 
+// "SGD 1.5M (Negotiable)", "From SGD 1.5M", "SGD 1.5M · View to Offer".
+function labelledPrice(price, label) {
+  const amount = formatPriceDisplay(price);
+  if (!amount) return label === 'View to Offer' ? 'View to Offer' : 'Price on request';
+  if (label === 'From') return `From SGD ${amount}`;
+  if (label === 'Negotiable') return `SGD ${amount} (Negotiable)`;
+  if (label === 'View to Offer') return `SGD ${amount} · View to Offer`;
+  return `SGD ${amount}`;
+}
+
+const EC_ELIGIBILITY_TEXT = {
+  citizens_prs: 'Singapore Citizens and PRs only',
+  all_buyers: 'Open to all buyers, including foreigners'
+};
+
 const emptyForm = { client_name: '', phone: '', email: '', message: '', website: '' };
 
 export default function PublicListing() {
@@ -154,12 +169,22 @@ export default function PublicListing() {
       {/* Buyer-facing: only the district may show here, never the street --
           "hide the road". If this listing predates district_label, show
           nothing rather than falling back to the raw location/street. */}
+      {/* A condo's project name is public unless the agent hid it (the server
+          then leaves project_name out of this payload). */}
+      {typeof listing.project_name === 'string' && listing.project_name.trim() && (
+        <div className="page-title" style={{ marginBottom: '4px' }}>{listing.project_name.trim()}</div>
+      )}
       {listing.district_label && (
-        <div className="page-title" style={{ marginBottom: '4px' }}>{listing.district_label}</div>
+        <div className={listing.project_name ? '' : 'page-title'} style={listing.project_name ? { fontSize: '14px', color: 'var(--cream-dim)', marginBottom: '8px' } : { marginBottom: '4px' }}>{listing.district_label}</div>
       )}
       <div style={{ fontSize: '20px', color: 'var(--gold-light)', marginBottom: '20px', fontFamily: "'Cormorant Garamond', serif" }}>
-        {formatPriceDisplay(listing.price) ? `SGD ${formatPriceDisplay(listing.price)}` : 'Price on request'}
+        {isCondoOnly(listing) ? labelledPrice(listing.price, listing.price_label) : (formatPriceDisplay(listing.price) ? `SGD ${formatPriceDisplay(listing.price)}` : 'Price on request')}
       </div>
+      {EC_ELIGIBILITY_TEXT[listing.ec_eligibility] && (
+        <div style={{ fontSize: '13px', color: 'var(--cream-dim)', marginBottom: '16px' }}>
+          Eligibility: {EC_ELIGIBILITY_TEXT[listing.ec_eligibility]}
+        </div>
+      )}
 
       {(listing.bedrooms || listing.land_size > 0 || listing.built_up > 0 || publicTenure || publicFloor) && (
         <div style={{ display: 'flex', gap: '20px', marginBottom: '24px', fontSize: '13px', color: 'var(--cream-dim)', flexWrap: 'wrap' }}>
@@ -178,6 +203,14 @@ export default function PublicListing() {
       {listing.agent && listing.agent.name && (
         <div style={{ fontSize: '13px', color: 'var(--cream-faint)', marginBottom: '32px', borderTop: '1px solid rgba(212,175,55,0.2)', paddingTop: '16px' }}>
           Listed by {listing.agent.name}{listing.agent.agency ? ` · ${listing.agent.agency}` : ''}
+          {/* CEA details: condo-family listings only, and only when all are present. */}
+          {isCondoOnly(listing) && listing.agent.cea_reg_no && listing.agent.agency_name && listing.agent.agency_licence_no && (
+            <div style={{ marginTop: '6px', lineHeight: 1.6 }}>
+              {listing.agent.contact && <div>{listing.agent.name} | {listing.agent.contact}</div>}
+              <div>CEA Reg No: {listing.agent.cea_reg_no}</div>
+              <div>Agency: {listing.agent.agency_name} (Licence No: {listing.agent.agency_licence_no})</div>
+            </div>
+          )}
         </div>
       )}
 

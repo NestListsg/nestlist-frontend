@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { millionsToFullNumber, fullNumberToMillions } from '../utils/format';
 import { genUploadSession } from '../utils/uploadSession';
-import { PRESTIGE_TYPES, CONDO_FAMILY_TYPES, isCondoFamilyType, isCondoOnly } from '../utils/propertyTypes';
+import { PRESTIGE_TYPES, CONDO_FAMILY_TYPES, isCondoFamilyType, isCondoOnly, condoKind } from '../utils/propertyTypes';
 
 const API = process.env.REACT_APP_API_URL || '';
 const STORAGE_KEY = 'nestlist_new_listing_form';
@@ -62,12 +62,20 @@ const DEFAULT_FORM = {
   // when a Condominium / EC / Apartment type is selected. Years are kept as
   // strings in the form ('' = not given) and sent as integers (0 = unknown).
   project_name: '', tenure: '', tenure_detail: '', floor_level: '',
-  top_year: '', lease_start_year: ''
+  top_year: '', lease_start_year: '',
+  hide_project_name: false, price_label: '', ec_eligibility: '',
+  // Per listing, never carried over from a previous one (see the save effect).
+  owner_consent_confirmed: false
 };
 
 // Backend's canonical options (main.py TENURE_OPTIONS / FLOOR_LEVEL_OPTIONS).
 const TENURE_OPTIONS = ['Freehold', '99-year leasehold', '999-year leasehold', 'Other'];
 const FLOOR_LEVEL_OPTIONS = ['Low', 'Mid', 'High'];
+const PRICE_LABEL_OPTIONS = ['Negotiable', 'View to Offer', 'From'];
+const EC_ELIGIBILITY_CHOICES = [
+  { value: 'citizens_prs', label: 'Singapore Citizens & PRs only (5-10 yrs after TOP)' },
+  { value: 'all_buyers', label: 'All buyers incl. foreigners (10+ yrs)' }
+];
 const STRATA_TEXT_FIELDS = ['project_name', 'tenure', 'tenure_detail', 'floor_level'];
 
 const MAX_YEAR = () => new Date().getFullYear() + 10;
@@ -89,7 +97,7 @@ function toYear(v) {
 //   - Mixed landed + condo: both sets are sent as entered.
 function strataPayload(form, types) {
   const hasCondo = types.some(isCondoFamilyType);
-  const blank = { project_name: '', tenure: '', tenure_detail: '', floor_level: '', top_year: 0, lease_start_year: 0 };
+  const blank = { project_name: '', tenure: '', tenure_detail: '', floor_level: '', top_year: 0, lease_start_year: 0, hide_project_name: false, price_label: '', ec_eligibility: '' };
   if (!hasCondo) return blank;
   const tenure = TENURE_OPTIONS.includes(form.tenure) ? form.tenure : '';
   const leasehold = tenure !== '' && tenure !== 'Freehold';
@@ -99,7 +107,12 @@ function strataPayload(form, types) {
     tenure_detail: tenure === 'Other' ? String(form.tenure_detail || '').trim().slice(0, 80) : '',
     floor_level: FLOOR_LEVEL_OPTIONS.includes(form.floor_level) ? form.floor_level : '',
     top_year: toYear(form.top_year),
-    lease_start_year: leasehold ? toYear(form.lease_start_year) : 0
+    lease_start_year: leasehold ? toYear(form.lease_start_year) : 0,
+    hide_project_name: form.hide_project_name === true,
+    // The price label and EC eligibility are condo-family choices; a landed
+    // listing never sends them.
+    price_label: isCondoOnly({ property_types: types }) && PRICE_LABEL_OPTIONS.includes(form.price_label) ? form.price_label : '',
+    ec_eligibility: types.some(t => condoKind(t) === 'ec') && EC_ELIGIBILITY_CHOICES.some(c => c.value === form.ec_eligibility) ? form.ec_eligibility : ''
   };
   if (isCondoOnly({ property_types: types })) {
     Object.assign(out, { land_size: 0, plot_width: 0, plot_depth: 0, storeys: 0, site_coverage: 0 });
@@ -154,7 +167,13 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         tenure_detail: editingListing.tenure_detail || '',
         floor_level: editingListing.floor_level || '',
         top_year: editingListing.top_year ? String(editingListing.top_year) : '',
-        lease_start_year: editingListing.lease_start_year ? String(editingListing.lease_start_year) : ''
+        lease_start_year: editingListing.lease_start_year ? String(editingListing.lease_start_year) : '',
+        hide_project_name: editingListing.hide_project_name === true,
+        price_label: editingListing.price_label || '',
+        ec_eligibility: editingListing.ec_eligibility || '',
+        // Already confirmed listings stay ticked; older ones (null) start
+        // unticked and the agent ticks once to save.
+        owner_consent_confirmed: editingListing.owner_consent_confirmed === true
       };
     }
     try {
@@ -170,7 +189,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       parsed.property_type = parsed.property_types[0] || '';
       // Forms saved before a field existed (e.g. the condo fields) get its
       // default, so every input stays a controlled '' rather than undefined.
-      return { ...DEFAULT_FORM, ...parsed };
+      return { ...DEFAULT_FORM, ...parsed, owner_consent_confirmed: false };
     } catch {
       return DEFAULT_FORM;
     }
@@ -252,7 +271,8 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   useEffect(() => {
     if (isEditing) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(form));
+      // Consent is per listing: never remembered into the next new listing.
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...form, owner_consent_confirmed: false }));
     } catch {}
   }, [form, isEditing]);
 
@@ -264,6 +284,8 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   const selectedTypes = Array.isArray(form.property_types) ? form.property_types.filter(Boolean) : [];
   const hasCondoType = selectedTypes.some(isCondoFamilyType);
   const showLandFields = !isCondoOnly({ property_types: selectedTypes });
+  const condoOnlyListing = hasCondoType && !showLandFields;
+  const hasEcType = selectedTypes.some(t => condoKind(t) === 'ec');
   // sg_citizen defaults to true - GCB/landed purchases are Singapore Citizens only
 
   // Toggle a property type in/out of the multi-select, always keeping
@@ -938,6 +960,9 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       property_types: cleanTypes,
       property_type: cleanTypes[0] || form.property_type || '',
       price: millionsToFullNumber(form.price),
+      // Always sent (true/false) on create AND edit; the backend treats a missing
+      // field as a legacy client.
+      owner_consent_confirmed: form.owner_consent_confirmed === true,
       ...strataPayload(form, cleanTypes)
     };
     // What the agent actually gave us in the condo fields, so we can tell
@@ -959,6 +984,13 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         if (strataSent && (data.attributes_saved === false || !strataKept)) {
           setSaveSuccess('Listing updated. Note: the condo details (project name, tenure, floor level, years) could not be stored yet - everything else is saved. Please re-enter them later.');
           setTimeout(() => onDoneEditing && onDoneEditing(), 5000);
+          return;
+        }
+        const editWarnings = Array.isArray(data.compliance_warnings) ? data.compliance_warnings.filter(w => typeof w === 'string' && w.trim()) : [];
+        if (editWarnings.length) {
+          // Warnings are advice, never a block: the listing is saved. Leave time to read them.
+          setSaveSuccess(`Listing updated. Please check: ${editWarnings.join(' ')}`);
+          setTimeout(() => onDoneEditing && onDoneEditing(), 8000);
           return;
         }
         setSaveSuccess('Listing updated!');
@@ -1251,7 +1283,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
             {hasCondoType && (
               <>
                 <div className="form-group">
-                  <label className="form-label">Project Name (optional, private)</label>
+                  <label className="form-label">Project Name (optional)</label>
                   <input
                     className="form-input"
                     value={form.project_name || ''}
@@ -1260,9 +1292,37 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
                     placeholder="e.g. the development's name - no unit number"
                   />
                   <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
-                    For your own records and Pricing Reports only. It is never shown in captions, the write-up or your buyer page - buyers see the district.
+                    Shown in your captions and buyer page, and used for Pricing Reports. Never add a unit number.
                   </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', fontSize: '12px', color: 'rgba(248,244,236,0.75)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={form.hide_project_name === true} onChange={e => set('hide_project_name', e.target.checked)} />
+                    Hide project name from public posts
+                  </label>
                 </div>
+                {condoOnlyListing && (
+                  <div className="form-group">
+                    <label className="form-label">Price Display (optional)</label>
+                    <select className="form-select" value={form.price_label || ''} onChange={e => set('price_label', e.target.value)}>
+                      <option value="">-- Just the price --</option>
+                      {PRICE_LABEL_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                    <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
+                      Condo prices are shown openly, e.g. "SGD 1.5M (Negotiable)".
+                    </div>
+                  </div>
+                )}
+                {hasEcType && (
+                  <div className="form-group">
+                    <label className="form-label">EC Buyer Eligibility (optional)</label>
+                    <select className="form-select" value={form.ec_eligibility || ''} onChange={e => set('ec_eligibility', e.target.value)}>
+                      <option value="">-- Not stated --</option>
+                      {EC_ELIGIBILITY_CHOICES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                    </select>
+                    <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
+                      Captions only mention eligibility if you choose it here.
+                    </div>
+                  </div>
+                )}
                 <div className="form-group">
                   <label className="form-label">Tenure (optional)</label>
                   <select className="form-select" value={form.tenure || ''} onChange={e => set('tenure', e.target.value)}>
@@ -1665,6 +1725,16 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
           </div>
         )}
 
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '16px', fontSize: '13px', color: 'rgba(248,244,236,0.85)', cursor: 'pointer' }}>
+          <input
+            type="checkbox" style={{ marginTop: '3px' }}
+            checked={form.owner_consent_confirmed === true}
+            onChange={e => set('owner_consent_confirmed', e.target.checked)}
+            required
+          />
+          <span>I have the property owner's written consent to advertise this listing.</span>
+        </label>
+
         <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
           <button
             type="button" onClick={isEditing ? onDoneEditing : clearForm}
@@ -1690,6 +1760,11 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         <>
           <div className="divider" />
           <div className="section-label">Step 1 - URA Compliance Check</div>
+          {condoOnlyListing && Array.isArray(result.cea_missing) && result.cea_missing.length > 0 && (
+            <div className="compliance-item compliance-warn">
+              Your CEA details are incomplete, so they were left off this listing. Add them in My Profile - CEA requires them on property advertisements.
+            </div>
+          )}
           {result.compliance.passed.map((p, i) => <div key={i} className="compliance-item compliance-pass">{p}</div>)}
           {result.compliance.warnings.map((w, i) => <div key={i} className="compliance-item compliance-warn">{w}</div>)}
           {result.compliance.issues.map((e, i) => <div key={i} className="compliance-item compliance-fail">{e}</div>)}

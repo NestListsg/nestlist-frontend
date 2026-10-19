@@ -326,7 +326,7 @@ export default function PricingReports({ token }) {
             <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.6)', marginBottom: '14px' }}>
               Matched to URA development: {report.matched_project}
               {report.project_match === 'close' && ' (a close match to the name you entered, not an exact one - please check it is the right development)'}
-              {report.project_match === 'ambiguous' && ' (the name matched more than one development - please check these are the right ones)'}
+              {report.project_match === 'ambiguous' && ' (more than one development matched)'}
             </div>
           )}
 
@@ -343,6 +343,13 @@ export default function PricingReports({ token }) {
                 : (report.project_name
                   ? `No recent sales found in ${report.project_name}, so this compares sales on the street instead.`
                   : 'Compared with condo-family sales on this street.')}
+            </div>
+          )}
+
+          {(report.project_match === 'ambiguous'
+            || ((Number(report.comparable_count) || 0) === 0 && /^\S+$/.test(String(report.project_name || projectName || '').trim()))) && (
+            <div style={{ fontSize: '12px', color: 'rgba(240,200,74,0.9)', marginBottom: '14px' }}>
+              Several developments match - add the street or the full development name.
             </div>
           )}
 

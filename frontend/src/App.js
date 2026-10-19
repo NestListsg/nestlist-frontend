@@ -138,6 +138,29 @@ function AuthenticatedApp() {
   const [handlePromptDismissed, setHandlePromptDismissed] = useState(false);
   const isFirstPageRender = useRef(true);
 
+  // Refresh the saved profile once per session so newer fields (the CEA
+  // details) reach agents who logged in before they existed. Best effort: on
+  // any failure the saved copy is simply kept.
+  useEffect(() => {
+    if (!token) return undefined;
+    const controller = new AbortController();
+    fetch(`${process.env.REACT_APP_API_URL || ''}/api/profile`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(fresh => {
+        if (!fresh || typeof fresh !== 'object' || !fresh.id) return;
+        setAgent(prev => {
+          const merged = { ...(prev || {}), ...fresh };
+          try { localStorage.setItem('nl_agent', JSON.stringify(merged)); } catch {}
+          return merged;
+        });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [token]);
+
   // Keep the URL in sync with the current page so reloads and shared links
   // land on the right place. Skipped on the very first render -- the initial
   // page was already derived from the URL above, so pushing again there
