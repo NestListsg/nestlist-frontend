@@ -305,7 +305,35 @@ function buildLinkedInHomeCaption(listing, wing, agent) {
   );
 }
 
-function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) {
+// The project name is agent-only (the form promises it never reaches a
+// caption), but an agent may also type it into Special Features or hand-edit
+// it into the write-up. Every caption therefore works from a copy whose
+// features/content have it swapped for the district -- with any number in
+// front of it ("26 Newton") going too, so it can never read "26 District 11".
+// Whole-word, case-insensitive. Mirrors the backend's buyer-page scrub
+// (_scrub_project_name), but stricter: names of 4+ characters are scrubbed
+// (the backend skips one-word names under 6), so the caption promise holds.
+function escapeRegExp(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function scrubProjectName(text, listing) {
+  if (!text) return text;
+  const name = String(listing.project_name || '').trim();
+  if (name.length < 4) return text;
+  try {
+    const re = new RegExp(`(^|[^\\w])(?:\\d{1,4}[A-Za-z]?\\s+)?${escapeRegExp(name)}(?![\\w])`, 'gi');
+    const replacement = listing.district_label || 'the development';
+    return String(text).replace(re, (m, lead) => `${lead}${replacement}`);
+  } catch {
+    return text;
+  }
+}
+
+function generateCaption(rawListing, platform, style, pgLimit, agent, marketPulse) {
+  const listing = (rawListing && rawListing.project_name)
+    ? { ...rawListing, features: scrubProjectName(rawListing.features, rawListing), content: scrubProjectName(rawListing.content, rawListing) }
+    : rawListing;
   const wing = listingWing(listing);
   const isHome = wing !== 'prestige';
   if (platform === 'linkedin') {

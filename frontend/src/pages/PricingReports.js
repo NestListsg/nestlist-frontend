@@ -309,7 +309,7 @@ export default function PricingReports({ token }) {
               borderRadius: '3px', padding: '8px 12px'
             }}>
               {report.data_stale
-                ? `⚠️ URA's data service could not be reached just now, so this report uses the last copy we have${report.data_as_of ? ` (from ${formatAsOf(report.data_as_of)})` : ''}. Recent sales may be missing - generate again later for the latest.`
+                ? `Using our saved copy of URA sales${report.data_as_of ? ` from ${formatAsOf(report.data_as_of)}` : ''}; a fresh one is loading. Generate again in a few minutes for the very latest.`
                 : "⚠️ URA's data service only partly answered, so some recent sales may be missing from this report. Generate again later for a complete picture."}
             </div>
           )}

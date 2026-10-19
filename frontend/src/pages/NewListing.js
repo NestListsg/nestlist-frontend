@@ -70,11 +70,14 @@ const TENURE_OPTIONS = ['Freehold', '99-year leasehold', '999-year leasehold', '
 const FLOOR_LEVEL_OPTIONS = ['Low', 'Mid', 'High'];
 const STRATA_TEXT_FIELDS = ['project_name', 'tenure', 'tenure_detail', 'floor_level'];
 
+const MAX_YEAR = () => new Date().getFullYear() + 10;
+
 // '' / junk / out-of-range -> 0 (the backend's "unknown"); never sends a
 // string to an int field (that would fail the whole save with a 422).
 function toYear(v) {
   const n = parseInt(String(v ?? '').trim(), 10);
-  return Number.isFinite(n) && n >= 1900 && n <= 2100 ? n : 0;
+  // Same range the backend accepts (_valid_year): 1900 to this year + 10.
+  return Number.isFinite(n) && n >= 1900 && n <= MAX_YEAR() ? n : 0;
 }
 
 // The condo-family part of the save payload. Always sends ALL six keys: the
@@ -1404,6 +1407,9 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
                     onChange={e => set('top_year', e.target.value.replace(/[^0-9]/g, ''))}
                     placeholder="e.g. 2019"
                   />
+                  {String(form.top_year || "").length === 4 && toYear(form.top_year) === 0 && (
+                    <div className="error-msg" style={{ marginTop: '6px' }}>Please enter a year between 1900 and {MAX_YEAR()} - otherwise it is left off.</div>
+                  )}
                 </div>
                 {form.tenure && form.tenure !== 'Freehold' && (
                   <div className="form-group">
@@ -1416,6 +1422,9 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
                       onChange={e => set('lease_start_year', e.target.value.replace(/[^0-9]/g, ''))}
                       placeholder="e.g. 2015"
                     />
+                    {String(form.lease_start_year || "").length === 4 && toYear(form.lease_start_year) === 0 && (
+                      <div className="error-msg" style={{ marginTop: '6px' }}>Please enter a year between 1900 and {MAX_YEAR()} - otherwise it is left off.</div>
+                    )}
                   </div>
                 )}
               </>
