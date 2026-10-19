@@ -39,7 +39,7 @@ export default function MatchingListings({ token, buyerId }) {
               </span>
               <div style={{ color: 'rgba(248,244,236,0.5)', fontSize: '12px', marginTop: '2px' }}>
                 {m.reasons.join(' · ')}
-                {m.tenure_unconfirmed && (
+                {m.tenure_unconfirmed && !(Array.isArray(m.reasons) && m.reasons.some(r => /tenure not confirmed/i.test(String(r)))) && (
                   <span style={{ marginLeft: '8px', fontSize: '11px', fontStyle: 'italic', color: 'rgba(240,200,74,0.7)' }}>Tenure not confirmed</span>
                 )}
               </div>
