@@ -1,6 +1,8 @@
 /* eslint-disable */
 import React from 'react';
 
+// Fallback only: the real limit comes from the server (max_video_photos) and is passed in
+// as the `max` prop. This is used when the server has not told us yet.
 export const VIDEO_PHOTO_MAX = 6;
 
 const gold = '#D4AF37';
@@ -12,7 +14,7 @@ const cream = 'rgba(248,244,236,0.75)';
  *
  * The default is Auto: nothing is sent to the server and the video is built exactly as
  * it always has been. "Choose photos" lets the agent tap photos to build an ordered
- * list (max 6): the first photo opens the video, the last one closes it.
+ * list (up to the `max` prop): the first photo opens the video, the last one closes it.
  *
  * Props:
  *  - photos:   the listing's photo URLs (listing.images)
@@ -21,15 +23,17 @@ const cream = 'rgba(248,244,236,0.75)';
  *              still exist on the listing -- the parent derives this)
  *  - onChange: ({ mode, urls }) => void
  *  - disabled: lock the choice while a video is rendering
+ *  - max:      how many photos may be chosen (server's max_video_photos); falls back to 6
  */
-export default function VideoPhotoPicker({ photos, mode, urls, onChange, disabled }) {
+export default function VideoPhotoPicker({ photos, mode, urls, onChange, disabled, max }) {
   const all = Array.isArray(photos) ? photos.filter(Boolean) : [];
   // With a single photo there is nothing to choose or order.
   if (all.length < 2) return null;
 
   const custom = mode === 'custom';
   const chosen = Array.isArray(urls) ? urls : [];
-  const atMax = chosen.length >= VIDEO_PHOTO_MAX;
+  const cap = Number.isInteger(max) && max > 0 ? max : VIDEO_PHOTO_MAX;
+  const atMax = chosen.length >= cap;
 
   const setMode = (m) => { if (!disabled && m !== mode) onChange({ mode: m, urls: chosen }); };
   const toggle = (url) => {
@@ -138,7 +142,7 @@ export default function VideoPhotoPicker({ photos, mode, urls, onChange, disable
                 Choose photos
               </span>
               <span style={{ display: 'block', fontSize: '11px', color: 'rgba(248,244,236,0.55)', lineHeight: 1.4, marginTop: '2px' }}>
-                Pick up to {VIDEO_PHOTO_MAX} and set their order.
+                Pick up to {cap} and set their order.
               </span>
             </span>
           </button>
@@ -150,7 +154,7 @@ export default function VideoPhotoPicker({ photos, mode, urls, onChange, disable
           <div style={{ fontSize: '11px', color: 'rgba(248,244,236,0.65)', lineHeight: 1.5, marginBottom: '8px' }}>
             Tap photos in the order you want them. The first one opens the video and the last one closes it.{' '}
             <span style={{ color: atMax ? goldLight : 'rgba(248,244,236,0.65)' }}>
-              {chosen.length} of {VIDEO_PHOTO_MAX} chosen{atMax ? ' (that is the maximum -- remove one to swap it)' : ''}.
+              {chosen.length} of {cap} chosen{atMax ? ' (that is the maximum -- remove one to swap it)' : ''}.
             </span>
           </div>
 

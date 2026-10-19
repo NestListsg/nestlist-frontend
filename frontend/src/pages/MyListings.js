@@ -26,6 +26,18 @@ const saveMusicChoice = (id) => {
 // survives a reload. Storage can throw or hold junk, so every access is guarded and the
 // fallback is always "no entry" = Auto (today's behaviour).
 const VIDEO_PHOTOS_KEY = 'nestlist_video_photos';
+// How many photos the server lets a video use (its max_video_photos). The server is the
+// authority and can change it, so we remember the last value it told us and fall back to
+// VIDEO_PHOTO_MAX (6) only when we have never heard. HARD_MAX is just a sanity ceiling for
+// reading saved picks back: it must NOT be the old 6, or picks 7-10 would be lost on load.
+const VIDEO_PHOTO_CAP_KEY = 'nestlist_video_photo_cap';
+const VIDEO_PHOTO_HARD_MAX = 50;
+const readSavedPhotoCap = () => {
+  try {
+    const n = parseInt(window.localStorage.getItem(VIDEO_PHOTO_CAP_KEY) || '', 10);
+    return Number.isInteger(n) && n >= 1 && n <= VIDEO_PHOTO_HARD_MAX ? n : null;
+  } catch { return null; }
+};
 
 // A Signature job for a listing is a different job from its Classic job, so its loading /
 // queue / error / notes state lives under this key in the same per-listing state objects
@@ -39,7 +51,7 @@ const readSavedVideoPhotos = () => {
     Object.keys(raw).forEach(id => {
       const e = raw[id];
       if (e && e.mode === 'custom' && Array.isArray(e.urls)) {
-        out[id] = { mode: 'custom', urls: e.urls.filter(u => typeof u === 'string').slice(0, VIDEO_PHOTO_MAX) };
+        out[id] = { mode: 'custom', urls: e.urls.filter(u => typeof u === 'string').slice(0, VIDEO_PHOTO_HARD_MAX) };
       }
     });
     return out;
@@ -847,6 +859,8 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   // Agent's photo pick for the Classic video, listingId -> { mode: 'auto'|'custom', urls }.
   // No entry = Auto. Mirrored to localStorage (guarded) because the server doesn't store it.
   const [videoPhotoPick, setVideoPhotoPick] = useState(readSavedVideoPhotos);
+  // The server's current photo limit for a video (null = not heard yet; see readSavedPhotoCap).
+  const [videoPhotoCap, setVideoPhotoCap] = useState(readSavedPhotoCap);
   // What the last generate actually did with the pick, listingId -> [plain-language notes].
   const [videoPhotoNotes, setVideoPhotoNotes] = useState({});
   const [marketPulse, setMarketPulse] = useState(null);
@@ -940,6 +954,28 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       .catch(() => setVideoTemplates([]));
   }, [token]);
 
+  // Remember the photo limit the server reports (max_video_photos on the generate and status
+  // responses). Ignores anything that is not a sensible whole number.
+  const noteMaxPhotos = (data) => {
+    const n = data && data.max_video_photos;
+    if (!Number.isInteger(n) || n < 1 || n > VIDEO_PHOTO_HARD_MAX) return;
+    setVideoPhotoCap(n);
+    try { window.localStorage.setItem(VIDEO_PHOTO_CAP_KEY, String(n)); } catch { /* ignore */ }
+  };
+
+  // Until we have heard the limit, ask once: opening a listing reads its video status, which
+  // carries max_video_photos. Fail soft -- if it fails we keep using the fallback of 6.
+  useEffect(() => {
+    if (!expanded || videoPhotoCap) return undefined;
+    let cancelled = false;
+    fetch(`${API}/api/listings/${expanded}/video-status`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled && d) noteMaxPhotos(d); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+    // eslint-disable-next-line
+  }, [expanded, videoPhotoCap, token]);
+
   // Returns the fresh track list (or null if the fetch failed) so a caller that just hit
   // "Unknown music track" can refresh and fall back to Auto.
   const loadMusicTracks = async () => {
@@ -976,19 +1012,24 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   // be deleted after being picked). Returns { mode, urls }; urls is empty unless the
   // mode is 'custom' AND at least one picked photo still exists -- so the Auto path
   // (no entry, or nothing valid picked) never sends anything.
+  // photoCapUi = what the picker shows/enforces (falls back to 6 if never told). Trimming of
+  // saved or incoming picks only uses a cap we actually heard from the server, otherwise the
+  // sanity ceiling -- never the 6 fallback, which would quietly drop picks 7-10.
+  const photoCapUi = videoPhotoCap || VIDEO_PHOTO_MAX;
+  const photoCapTrim = videoPhotoCap || VIDEO_PHOTO_HARD_MAX;
   const videoPhotoStateFor = (listing) => {
     const entry = videoPhotoPick[listing.id];
     if (!entry || entry.mode !== 'custom') return { mode: 'auto', urls: [] };
     const have = new Set(listing.images || []);
     const urls = [];
     (entry.urls || []).forEach(u => { if (have.has(u) && !urls.includes(u)) urls.push(u); });
-    return { mode: 'custom', urls: urls.slice(0, VIDEO_PHOTO_MAX) };
+    return { mode: 'custom', urls: urls.slice(0, photoCapTrim) };
   };
 
   const handleVideoPhotoChange = (listingId, next) => {
     setVideoPhotoPick(prev => {
       const all = { ...prev };
-      if (next.mode === 'custom') all[listingId] = { mode: 'custom', urls: (next.urls || []).slice(0, VIDEO_PHOTO_MAX) };
+      if (next.mode === 'custom') all[listingId] = { mode: 'custom', urls: (next.urls || []).slice(0, photoCapTrim) };
       else delete all[listingId]; // back to Auto = no entry at all
       saveVideoPhotos(all);
       return all;
@@ -1465,6 +1506,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
 
       // Tell the agent plainly what the video will actually contain when it differs from
       // what they asked for (a pick that fell back to Auto, photos that were skipped).
+      noteMaxPhotos(data);
       noteVideoPhotos(jobKey, data, pickedPhotos.length > 0);
 
       // Older backend responses returned the finished video directly (Classic only).
@@ -1536,6 +1578,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
           throw new Error("We couldn't confirm your Signature video started. Please press the button to try again.");
         }
         if (!updated) continue;
+        noteMaxPhotos(updated);
 
         // The two status endpoints name the same things differently.
         const jobStatus = isSig ? updated.status : updated.video_status;
@@ -2846,6 +2889,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                     mode={videoPhotoStateFor(l).mode}
                     urls={videoPhotoStateFor(l).urls}
                     onChange={(next) => handleVideoPhotoChange(l.id, next)}
+                    max={photoCapUi}
                     disabled={!!videoLoading[l.id] || !!videoLoading[sigKey(l.id)]}
                   />
                   <MusicPicker
@@ -3005,12 +3049,12 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                             const stored = l.video_captions || {};
                             const imgs = l.images || [];
                             const hero = getFeaturedIndex(l);
-                            // Same order the renderer uses: hero first, then the rest, capped at six.
+                            // Same order the renderer uses: hero first, then the rest, up to the server's photo limit.
                             // If the agent chose their own photos, those are the ones in the video.
                             const chosenPhotos = videoPhotoStateFor(l).urls;
                             const used = chosenPhotos.length
                               ? chosenPhotos
-                              : [imgs[hero], ...imgs.filter((_, i) => i !== hero)].filter(Boolean).slice(0, 6);
+                              : [imgs[hero], ...imgs.filter((_, i) => i !== hero)].filter(Boolean).slice(0, photoCapUi);
                             return used.map((url) => {
                               const v = stored[url];
                               const text = typeof v === 'string' ? v : (v && v.text) || '';
