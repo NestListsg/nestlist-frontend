@@ -63,14 +63,23 @@ export function sanitizeLocation(location) {
     .trim();
 }
 
-// Masks an exact price to the "$X.XXM" convention for social captions --
-// keeps the whole-million digit(s), masks everything after the decimal so
-// the exact figure never appears. Use at most once per caption; never pair
-// with the exact formatPriceM() output in the same generated copy.
+// Masks an exact price for social captions so the exact figure never
+// appears. Use at most once per caption; never pair with the exact
+// formatPriceM() output in the same generated copy.
+//   $1M and over: keeps the whole-million digit(s) -> "$12.XXM" (unchanged).
+//   Under $1M (condos, ECs, apartments): keeps the hundred-thousands digit ->
+//     $880,000 -> "$8XXK", never the old "$0.XXM" (which read as a defect).
+//   Under $100K, zero, negative or unparseable: "" (no price line beats a
+//     wrong-looking one -- a real listing price is never that low).
 export function maskPrice(price) {
   if (price === null || price === undefined || price === '') return '';
   const num = parseFloat(String(price).replace(/,/g, ''));
-  if (isNaN(num)) return '';
-  const wholeMillions = Math.floor(num / 1_000_000);
-  return `$${wholeMillions}.XXM`;
+  if (isNaN(num) || num <= 0) return '';
+  if (num >= 1_000_000) {
+    const wholeMillions = Math.floor(num / 1_000_000);
+    return `$${wholeMillions}.XXM`;
+  }
+  const hundredThousands = Math.floor(num / 100_000);
+  if (hundredThousands < 1) return '';
+  return `$${hundredThousands}XXK`;
 }

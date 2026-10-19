@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { millionsToFullNumber, fullNumberToMillions } from '../utils/format';
 import { genUploadSession } from '../utils/uploadSession';
-import { PROPERTY_TYPES } from '../utils/propertyTypes';
+import { PRESTIGE_TYPES, CONDO_FAMILY_TYPES, isCondoFamilyType, isCondoOnly } from '../utils/propertyTypes';
 
 const API = process.env.REACT_APP_API_URL || '';
 const STORAGE_KEY = 'nestlist_new_listing_form';
@@ -57,8 +57,64 @@ const DEFAULT_FORM = {
   property_type: 'Good Class Bungalow (GCB)', location: '', district: '', land_size: 0,
   built_up: 0, bedrooms: '', bathrooms: '', price: '', features: '',
   plot_width: 0, plot_depth: 0, storeys: 0, site_coverage: 0,
-  sg_citizen: true, code: ''
+  sg_citizen: true, code: '',
+  // NestList Home (condo family) -- only shown, and only sent with values,
+  // when a Condominium / EC / Apartment type is selected. Years are kept as
+  // strings in the form ('' = not given) and sent as integers (0 = unknown).
+  project_name: '', tenure: '', tenure_detail: '', floor_level: '',
+  top_year: '', lease_start_year: ''
 };
+
+// Backend's canonical options (main.py TENURE_OPTIONS / FLOOR_LEVEL_OPTIONS).
+const TENURE_OPTIONS = ['Freehold', '99-year leasehold', '999-year leasehold', 'Other'];
+const FLOOR_LEVEL_OPTIONS = ['Low', 'Mid', 'High'];
+const STRATA_TEXT_FIELDS = ['project_name', 'tenure', 'tenure_detail', 'floor_level'];
+
+// '' / junk / out-of-range -> 0 (the backend's "unknown"); never sends a
+// string to an int field (that would fail the whole save with a 422).
+function toYear(v) {
+  const n = parseInt(String(v ?? '').trim(), 10);
+  return Number.isFinite(n) && n >= 1900 && n <= 2100 ? n : 0;
+}
+
+// The condo-family part of the save payload. Always sends ALL six keys: the
+// backend replaces them wholesale on edit, so an untouched key would be
+// cleared, and a cleared one must really clear.
+//   - No condo type selected: all blank (a landed listing never stores them).
+//   - Condo type(s) only: the land/plot/storeys/site-coverage fields do not
+//     apply to a strata unit, so they go as 0 (the backend also drops them).
+//   - Mixed landed + condo: both sets are sent as entered.
+function strataPayload(form, types) {
+  const hasCondo = types.some(isCondoFamilyType);
+  const blank = { project_name: '', tenure: '', tenure_detail: '', floor_level: '', top_year: 0, lease_start_year: 0 };
+  if (!hasCondo) return blank;
+  const tenure = TENURE_OPTIONS.includes(form.tenure) ? form.tenure : '';
+  const leasehold = tenure !== '' && tenure !== 'Freehold';
+  const out = {
+    project_name: String(form.project_name || '').trim().slice(0, 120),
+    tenure,
+    tenure_detail: tenure === 'Other' ? String(form.tenure_detail || '').trim().slice(0, 80) : '',
+    floor_level: FLOOR_LEVEL_OPTIONS.includes(form.floor_level) ? form.floor_level : '',
+    top_year: toYear(form.top_year),
+    lease_start_year: leasehold ? toYear(form.lease_start_year) : 0
+  };
+  if (isCondoOnly({ property_types: types })) {
+    Object.assign(out, { land_size: 0, plot_width: 0, plot_depth: 0, storeys: 0, site_coverage: 0 });
+  }
+  return out;
+}
+
+// FastAPI sends `detail` as a string for our own errors but as a list of
+// objects for a validation failure -- never show "[object Object]".
+function readApiError(data, fallback) {
+  const d = data && data.detail;
+  if (typeof d === 'string' && d.trim()) return d;
+  if (Array.isArray(d) && d.length) {
+    const msgs = d.map(x => (x && x.msg) ? String(x.msg) : '').filter(Boolean);
+    if (msgs.length) return `${fallback}: ${msgs.join('; ')}`;
+  }
+  return fallback;
+}
 
 export default function NewListing({ agent, token, editingListing, onDoneEditing }) {
   const isEditing = !!editingListing;
@@ -89,7 +145,13 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         storeys: editingListing.storeys || 0,
         site_coverage: editingListing.site_coverage || 0,
         sg_citizen: true,
-        code: editingListing.code || ''
+        code: editingListing.code || '',
+        project_name: editingListing.project_name || '',
+        tenure: editingListing.tenure || '',
+        tenure_detail: editingListing.tenure_detail || '',
+        floor_level: editingListing.floor_level || '',
+        top_year: editingListing.top_year ? String(editingListing.top_year) : '',
+        lease_start_year: editingListing.lease_start_year ? String(editingListing.lease_start_year) : ''
       };
     }
     try {
@@ -103,7 +165,9 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         parsed.property_types = parsed.property_types.filter(Boolean);
       }
       parsed.property_type = parsed.property_types[0] || '';
-      return parsed;
+      // Forms saved before a field existed (e.g. the condo fields) get its
+      // default, so every input stays a controlled '' rather than undefined.
+      return { ...DEFAULT_FORM, ...parsed };
     } catch {
       return DEFAULT_FORM;
     }
@@ -190,6 +254,13 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
   }, [form, isEditing]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  // Which field groups apply to the selected type(s). Land/plot/storeys/site
+  // coverage show unless EVERY selected type is condo family (so a mixed
+  // landed + condo listing keeps them, and so does "nothing picked yet").
+  // Condo fields show as soon as any condo-family type is picked.
+  const selectedTypes = Array.isArray(form.property_types) ? form.property_types.filter(Boolean) : [];
+  const hasCondoType = selectedTypes.some(isCondoFamilyType);
+  const showLandFields = !isCondoOnly({ property_types: selectedTypes });
   // sg_citizen defaults to true - GCB/landed purchases are Singapore Citizens only
 
   // Toggle a property type in/out of the multi-select, always keeping
@@ -863,8 +934,12 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
       ...form,
       property_types: cleanTypes,
       property_type: cleanTypes[0] || form.property_type || '',
-      price: millionsToFullNumber(form.price)
+      price: millionsToFullNumber(form.price),
+      ...strataPayload(form, cleanTypes)
     };
+    // What the agent actually gave us in the condo fields, so we can tell
+    // them plainly if the server could not keep it.
+    const strataSent = STRATA_TEXT_FIELDS.some(k => payload[k]) || payload.top_year > 0 || payload.lease_start_year > 0;
     try {
       if (isEditing) {
         const res = await fetch(`${API}/api/listings/${editingListing.id}`, {
@@ -873,7 +948,16 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
           body: JSON.stringify(payload)
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Error saving listing');
+        if (!res.ok) throw new Error(readApiError(data, 'Error saving listing'));
+        // The saved row echoes the condo fields back. If we sent some and none
+        // came back, the server could not store them (its one-time database
+        // update has not run yet) -- say so instead of a silent loss.
+        const strataKept = data && (STRATA_TEXT_FIELDS.some(k => data[k]) || data.top_year > 0 || data.lease_start_year > 0);
+        if (strataSent && (data.attributes_saved === false || !strataKept)) {
+          setSaveSuccess('Listing updated. Note: the condo details (project name, tenure, floor level, years) could not be stored yet - everything else is saved. Please re-enter them later.');
+          setTimeout(() => onDoneEditing && onDoneEditing(), 5000);
+          return;
+        }
         setSaveSuccess('Listing updated!');
         setTimeout(() => onDoneEditing && onDoneEditing(), 900);
         return;
@@ -888,7 +972,14 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         body: JSON.stringify({ ...payload, photo_urls: stagedPhotoUrls, ...(writingStyle ? { writing_style: writingStyle } : {}) })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Error generating listing');
+      if (!res.ok) throw new Error(readApiError(data, 'Error generating listing'));
+      // Condo fields are stored only once the server's database update has
+      // run (attributes_saved). They were still used for this write-up; the
+      // agent just needs to know they will not be on the saved listing.
+      if (data && data.listing && strataSent && data.listing.attributes_saved !== true && data.compliance) {
+        const note = 'The condo details (project name, tenure, floor level, years) were used for this write-up but could not be saved on the listing yet. You can add them later with Edit.';
+        data.compliance = { ...data.compliance, warnings: [...(data.compliance.warnings || []), note] };
+      }
       setResult(data);
       // Backend attaches the staged photos to the new listing during
       // /generate and hands them back on data.listing.images -- show those
@@ -1042,7 +1133,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
         <div className="form-grid">
           <div>
             <div className="form-group">
-              <label className="form-label">1. Property Type</label>
+              <label className="form-label">Property Type</label>
               <div
                 style={{
                   display: 'flex', flexWrap: 'wrap', gap: '8px',
@@ -1051,25 +1142,33 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
                   border: `1px solid ${propertyTypeInvalid || (imageSuccess && form.property_types.length === 0) ? '#e05252' : 'rgba(212,175,55,0.3)'}`
                 }}
               >
-                {PROPERTY_TYPES.map(t => {
-                  const active = form.property_types.includes(t);
-                  return (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => toggleType(t)}
-                      style={{
-                        background: active ? 'rgba(212,175,55,0.25)' : 'transparent',
-                        border: `1px solid ${active ? '#D4AF37' : 'rgba(212,175,55,0.3)'}`,
-                        color: active ? '#F0C84A' : 'rgba(248,244,236,0.6)',
-                        padding: '6px 14px', borderRadius: '3px', cursor: 'pointer',
-                        fontSize: '12px', fontFamily: "'Montserrat', sans-serif"
-                      }}
-                    >
-                      {active ? '✓ ' : ''}{t}
-                    </button>
-                  );
-                })}
+                {[
+                  { label: 'Landed', types: PRESTIGE_TYPES },
+                  { label: 'Condo / Apartment', types: CONDO_FAMILY_TYPES }
+                ].map(group => (
+                  <div key={group.label} style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                    <span style={{ fontSize: '10px', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(248,244,236,0.4)', minWidth: '120px' }}>{group.label}</span>
+                    {group.types.map(t => {
+                      const active = form.property_types.includes(t);
+                      return (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => toggleType(t)}
+                          style={{
+                            background: active ? 'rgba(212,175,55,0.25)' : 'transparent',
+                            border: `1px solid ${active ? '#D4AF37' : 'rgba(212,175,55,0.3)'}`,
+                            color: active ? '#F0C84A' : 'rgba(248,244,236,0.6)',
+                            padding: '6px 14px', borderRadius: '3px', cursor: 'pointer',
+                            fontSize: '12px', fontFamily: "'Montserrat', sans-serif"
+                          }}
+                        >
+                          {active ? '✓ ' : ''}{t}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
               <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
                 Pick one or more. {form.property_types.length > 1
@@ -1083,11 +1182,11 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
               )}
             </div>
             <div className="form-group">
-              <label className="form-label">2. Location</label>
+              <label className="form-label">Location</label>
               <input className="form-input" value={form.location} onChange={e => set('location', e.target.value)} placeholder="e.g. Nassim Road, District 10" required />
             </div>
             <div className="form-group">
-              <label className="form-label">2b. District (optional)</label>
+              <label className="form-label">District (optional)</label>
               <select
                 ref={districtSelectRef}
                 className="form-select"
@@ -1130,30 +1229,71 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
                 </div>
               )}
             </div>
-            <div className="form-group">
-              <label className="form-label">3. Land Size (sqft)</label>
-              <input className="form-input" type="number" value={form.land_size} onChange={e => set('land_size', +e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">4. Plot Width / Frontage</label>
-              <input className="form-input" type="number" step="0.1" value={form.plot_width} onChange={e => set('plot_width', +e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">5. Plot Depth (metres)</label>
-              <input className="form-input" type="number" step="0.1" value={form.plot_depth} onChange={e => set('plot_depth', +e.target.value)} />
-            </div>
+            {showLandFields && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Land Size (sqft)</label>
+                  <input className="form-input" type="number" value={form.land_size} onChange={e => set('land_size', +e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Plot Width / Frontage</label>
+                  <input className="form-input" type="number" step="0.1" value={form.plot_width} onChange={e => set('plot_width', +e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Plot Depth (metres)</label>
+                  <input className="form-input" type="number" step="0.1" value={form.plot_depth} onChange={e => set('plot_depth', +e.target.value)} />
+                </div>
+              </>
+            )}
+            {hasCondoType && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Project Name (optional, private)</label>
+                  <input
+                    className="form-input"
+                    value={form.project_name || ''}
+                    maxLength={120}
+                    onChange={e => set('project_name', e.target.value)}
+                    placeholder="e.g. the development's name - no unit number"
+                  />
+                  <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
+                    For your own records and Pricing Reports only. It is never shown in captions, the write-up or your buyer page - buyers see the district.
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Tenure (optional)</label>
+                  <select className="form-select" value={form.tenure || ''} onChange={e => set('tenure', e.target.value)}>
+                    <option value="">-- Not stated --</option>
+                    {TENURE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  {form.tenure === 'Other' && (
+                    <input
+                      className="form-input"
+                      style={{ marginTop: '8px' }}
+                      value={form.tenure_detail || ''}
+                      maxLength={80}
+                      onChange={e => set('tenure_detail', e.target.value)}
+                      placeholder="e.g. 103-year leasehold"
+                    />
+                  )}
+                  <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
+                    Leave it blank if you are not sure - tenure is only mentioned when you give it.
+                  </div>
+                </div>
+              </>
+            )}
           </div>
           <div>
             <div className="form-group">
-              <label className="form-label">6. Built-up Size (sqft)</label>
+              <label className="form-label">{showLandFields ? 'Built-up Size (sqft)' : 'Floor Area (sqft)'}</label>
               <input className="form-input" type="number" value={form.built_up} onChange={e => set('built_up', +e.target.value)} />
             </div>
             <div className="form-group">
-              <label className="form-label">7. Bedrooms</label>
+              <label className="form-label">Bedrooms</label>
               <input className="form-input" value={form.bedrooms} onChange={e => set('bedrooms', e.target.value)} placeholder="e.g. 4" required />
             </div>
             <div className="form-group">
-              <label className="form-label">7b. Bathrooms</label>
+              <label className="form-label">Bathrooms</label>
               <input
                 ref={bathroomsInputRef}
                 className="form-input"
@@ -1191,7 +1331,7 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
               )}
             </div>
             <div className="form-group">
-              <label className="form-label">8. Asking Price (SGD, in Millions) (optional)</label>
+              <label className="form-label">Asking Price (SGD, in Millions) (optional)</label>
               <input
                 ref={priceInputRef}
                 className="form-input"
@@ -1204,7 +1344,9 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
                   setPriceConfirmed(true);
                   setPriceGateOpen(false);
                 }}
-                placeholder="e.g. 25.7 (leave blank if not set yet)"
+                placeholder={hasCondoType && !showLandFields
+                  ? 'e.g. 1.65, or 0.88 for $880K (leave blank if not set yet)'
+                  : 'e.g. 25.7 (leave blank if not set yet)'}
               />
               {priceAutofilled && !priceConfirmed && (
                 <div style={{
@@ -1228,14 +1370,56 @@ export default function NewListing({ agent, token, editingListing, onDoneEditing
                 </div>
               )}
             </div>
-            <div className="form-group">
-              <label className="form-label">9. Number of Storeys</label>
-              <input className="form-input" type="number" value={form.storeys} onChange={e => set('storeys', +e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">10. Site Coverage (%)</label>
-              <input className="form-input" type="number" step="0.1" value={form.site_coverage} onChange={e => set('site_coverage', +e.target.value)} />
-            </div>
+            {showLandFields && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Number of Storeys</label>
+                  <input className="form-input" type="number" value={form.storeys} onChange={e => set('storeys', +e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Site Coverage (%)</label>
+                  <input className="form-input" type="number" step="0.1" value={form.site_coverage} onChange={e => set('site_coverage', +e.target.value)} />
+                </div>
+              </>
+            )}
+            {hasCondoType && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Floor Level (optional)</label>
+                  <select className="form-select" value={form.floor_level || ''} onChange={e => set('floor_level', e.target.value)}>
+                    <option value="">-- Not stated --</option>
+                    {FLOOR_LEVEL_OPTIONS.map(f => <option key={f} value={f}>{f} floor</option>)}
+                  </select>
+                  <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.5)', marginTop: '6px' }}>
+                    A band only - the exact floor and unit number are never asked for or shown.
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">TOP Year (optional)</label>
+                  <input
+                    className="form-input"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={form.top_year || ''}
+                    onChange={e => set('top_year', e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="e.g. 2019"
+                  />
+                </div>
+                {form.tenure && form.tenure !== 'Freehold' && (
+                  <div className="form-group">
+                    <label className="form-label">Lease Start Year (optional)</label>
+                    <input
+                      className="form-input"
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={form.lease_start_year || ''}
+                      onChange={e => set('lease_start_year', e.target.value.replace(/[^0-9]/g, ''))}
+                      placeholder="e.g. 2015"
+                    />
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
 

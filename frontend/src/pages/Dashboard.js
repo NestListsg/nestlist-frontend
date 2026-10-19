@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { formatPriceDisplay } from '../utils/format';
+import UraSourceNotice from '../components/UraSourceNotice';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -49,7 +50,11 @@ export default function Dashboard({ agent, token, setPage }) {
       const res = await fetch(`${API}/api/market-pulse`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(pulseForm)
+        // The source-notice fields ride along on GET responses but are not
+        // database columns -- sending them back would break the save.
+        body: JSON.stringify(Object.fromEntries(
+          Object.entries(pulseForm || {}).filter(([k]) => !k.startsWith('source_'))
+        ))
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed to save');
@@ -223,6 +228,8 @@ export default function Dashboard({ agent, token, setPage }) {
           <div className="market-source">
             Source: URA Data Service API &nbsp;|&nbsp; Last refreshed: {refreshedDate ? formatRefreshedDate(pulse.refreshed_at) : 'unknown'}
           </div>
+          {/* Open Data Licence source notice -- required wherever these URA figures show. */}
+          <UraSourceNotice data={pulse} style={{ marginTop: '6px', fontSize: '10px' }} />
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { formatPriceDisplay } from '../utils/format';
+import { isCondoOnly } from '../utils/propertyTypes';
 
 const API = process.env.REACT_APP_API_URL || '';
 const LOGO = '/logo_2.png';
@@ -99,6 +100,12 @@ export default function PublicListing() {
     );
   }
 
+  // Buyer-facing condo facts: only the normalised tenure (one of the three
+  // standard values -- an "Other" free-text tenure is agent-only) and the
+  // floor BAND. Never the project name, which the backend does not send.
+  const publicTenure = ['Freehold', '99-year leasehold', '999-year leasehold'].includes(listing?.tenure) ? listing.tenure : '';
+  const publicFloor = ['Low', 'Mid', 'High'].includes(listing?.floor_level) ? listing.floor_level : '';
+
   return (
     <div style={wrapStyle}>
       <img src={LOGO} alt="NestList" style={{ height: '40px', marginBottom: '32px' }} />
@@ -154,11 +161,13 @@ export default function PublicListing() {
         {formatPriceDisplay(listing.price) ? `SGD ${formatPriceDisplay(listing.price)}` : 'Price on request'}
       </div>
 
-      {(listing.bedrooms || listing.land_size > 0 || listing.built_up > 0) && (
+      {(listing.bedrooms || listing.land_size > 0 || listing.built_up > 0 || publicTenure || publicFloor) && (
         <div style={{ display: 'flex', gap: '20px', marginBottom: '24px', fontSize: '13px', color: 'var(--cream-dim)', flexWrap: 'wrap' }}>
           {listing.bedrooms && <div>{listing.bedrooms}</div>}
           {listing.land_size > 0 && <div>Land: {listing.land_size.toLocaleString()} sqft</div>}
-          {listing.built_up > 0 && <div>Built-up: {listing.built_up.toLocaleString()} sqft</div>}
+          {listing.built_up > 0 && <div>{isCondoOnly(listing) ? 'Floor area' : 'Built-up'}: {listing.built_up.toLocaleString()} sqft</div>}
+          {publicTenure && <div>{publicTenure}</div>}
+          {publicFloor && <div>{publicFloor} floor</div>}
         </div>
       )}
 

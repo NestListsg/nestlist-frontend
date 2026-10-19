@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { formatPriceM, formatPriceDisplay, maskPrice } from '../utils/format';
 import { genUploadSession } from '../utils/uploadSession';
+import { listingWing } from '../utils/propertyTypes';
 import MatchingBuyers from '../components/MatchingBuyers';
 import MusicPicker, { MUSIC_AUTO } from '../components/MusicPicker';
 import VideoPhotoPicker, { VIDEO_PHOTO_MAX } from '../components/VideoPhotoPicker';
@@ -172,17 +173,155 @@ function formatBedroomsBullet(listing) {
   return `${listing.bedrooms} Bedroom${String(listing.bedrooms) === '1' ? '' : 's'}`;
 }
 
+// ---------------------------------------------------------------------------
+// Hashtag sets, picked by the listing's type family (listingWing in
+// utils/propertyTypes.js). PRESTIGE sets are exactly what every landed listing
+// has always had. HOME sets (condo family + a neutral fallback) are
+// content-studio's NestList Home spec (content/nestlist-home-condo-copy-spec.md
+// section 1.2): no landed or luxury words, no return/price-promise tags, never
+// the project name. A blank/unrecognised type gets the neutral Home set --
+// never the Prestige one.
+// ---------------------------------------------------------------------------
+const PRESTIGE_TAGS = {
+  facebook: '#NestList #NestListPrestige #SingaporeProperty #GCB #LandedProperty #PropertySG #RealEstate #Singapore #LuxuryProperty',
+  facebookLong: '#NestList #NestListPrestige #SingaporeProperty #GCB #LandedProperty #PropertySG #RealEstate #Singapore #LuxuryProperty #HomeSweetHome',
+  instagram: '#NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #PropertyForSale',
+  instagramLong: '#NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #SingaporeLife #PropertyInvestment #LandedHouse #Bungalow #PenthouseLiving #PropertyForSale',
+  tiktok: '#SingaporeProperty #PropertySG #LandedSG #RealEstateSG #SGProperty'
+};
+
+const HOME_TAGS = {
+  condo: {
+    facebook: ['#NestList', '#NestListHome', '#SingaporeProperty', '#PropertySG', '#SingaporeCondo', '#CondoLiving', '#RealEstate', '#Singapore', '#HomeSweetHome'],
+    instagram: ['#NestList', '#NestListHome', '#SingaporeProperty', '#SingaporeRealEstate', '#PropertySG', '#SingaporeCondo', '#CondoLiving', '#CondoForSale', '#SingaporeHome', '#HomeSweetHome', '#PropertyAgent', '#RealEstateSingapore', '#PropertySingapore', '#ApartmentLiving'],
+    instagramLongExtra: ['#SingaporeLife'],
+    tiktok: ['#SingaporeProperty', '#PropertySG', '#SGCondo', '#RealEstateSG', '#SGProperty']
+  },
+  // #FamilyHome kept for now -- Jane is deciding whether it presumes too much
+  // (content-studio's alternative is #SingaporeLife).
+  ec: {
+    facebook: ['#NestList', '#NestListHome', '#SingaporeProperty', '#PropertySG', '#ExecutiveCondominium', '#ECSingapore', '#RealEstate', '#Singapore', '#HomeSweetHome'],
+    instagram: ['#NestList', '#NestListHome', '#SingaporeProperty', '#SingaporeRealEstate', '#PropertySG', '#ExecutiveCondominium', '#ECSingapore', '#ECForSale', '#SingaporeHome', '#HomeSweetHome', '#PropertyAgent', '#RealEstateSingapore', '#PropertySingapore', '#FamilyHome'],
+    instagramLongExtra: ['#SingaporeLife'],
+    tiktok: ['#SingaporeProperty', '#PropertySG', '#SGEC', '#RealEstateSG', '#SGProperty']
+  },
+  apartment: {
+    facebook: ['#NestList', '#NestListHome', '#SingaporeProperty', '#PropertySG', '#SingaporeApartment', '#ApartmentForSale', '#RealEstate', '#Singapore', '#HomeSweetHome'],
+    instagram: ['#NestList', '#NestListHome', '#SingaporeProperty', '#SingaporeRealEstate', '#PropertySG', '#SingaporeApartment', '#ApartmentForSale', '#ApartmentLiving', '#SingaporeHome', '#HomeSweetHome', '#PropertyAgent', '#RealEstateSingapore', '#PropertySingapore', '#SingaporeLife'],
+    instagramLongExtra: ['#PropertyForSale'],
+    tiktok: ['#SingaporeProperty', '#PropertySG', '#SGApartment', '#RealEstateSG', '#SGProperty']
+  },
+  neutral: {
+    facebook: ['#NestList', '#NestListHome', '#SingaporeProperty', '#PropertySG', '#RealEstate', '#Singapore', '#HomeSweetHome', '#SingaporeHome'],
+    instagram: ['#NestList', '#NestListHome', '#SingaporeProperty', '#SingaporeRealEstate', '#PropertySG', '#SingaporeHome', '#HomeSweetHome', '#PropertyAgent', '#RealEstateSingapore', '#PropertySingapore', '#PropertyForSale', '#SingaporeLife'],
+    instagramLongExtra: [],
+    tiktok: ['#SingaporeProperty', '#PropertySG', '#RealEstateSG', '#SGProperty', '#SingaporeHome']
+  }
+};
+
+// Upper bound per platform (spec 1.1 rule 5). Data-driven tags displace the
+// LAST fixed tags so a set never runs over.
+const HOME_TAG_CAP = { facebook: 10, instagram: 15, tiktok: 5 };
+
+const TENURE_TAGS = {
+  'Freehold': '#Freehold',
+  '99-year leasehold': '#99YearLeasehold',
+  '999-year leasehold': '#999YearLeasehold'
+};
+
+// Only facts the agent actually gave (spec 1.4): a canonical tenure, and a
+// real district number from district_label ("District 15" -> #District15).
+// "Other" tenure, a blank/"Singapore" district etc. add nothing.
+function homeDataTags(listing) {
+  const tags = [];
+  const tenureTag = TENURE_TAGS[String(listing.tenure || '').trim()];
+  if (tenureTag) tags.push(tenureTag);
+  const m = /^\s*District\s*(\d{1,2})\b/i.exec(String(listing.district_label || ''));
+  if (m) {
+    const n = Number(m[1]);
+    if (n >= 1 && n <= 28) tags.push(`#District${n}`);
+  }
+  return tags;
+}
+
+function fitTags(fixed, extras, cap) {
+  const extra = extras.filter(t => !fixed.includes(t));
+  const overflow = Math.max(0, fixed.length + extra.length - cap);
+  return [...fixed.slice(0, fixed.length - overflow), ...extra].join(' ');
+}
+
+// variant: 'facebook' | 'facebookLong' | 'instagram' | 'instagramLong' | 'tiktok'
+function hashtagLine(listing, wing, variant) {
+  if (wing === 'prestige') return PRESTIGE_TAGS[variant] || '';
+  const set = HOME_TAGS[wing] || HOME_TAGS.neutral;
+  const extras = homeDataTags(listing);
+  if (variant === 'facebook' || variant === 'facebookLong') return fitTags(set.facebook, extras, HOME_TAG_CAP.facebook);
+  if (variant === 'instagram') return fitTags(set.instagram, extras, HOME_TAG_CAP.instagram);
+  if (variant === 'instagramLong') return fitTags([...set.instagram, ...set.instagramLongExtra], extras, HOME_TAG_CAP.instagram);
+  if (variant === 'tiktok') return fitTags(set.tiktok, extras, HOME_TAG_CAP.tiktok);
+  return '';
+}
+
+// Joins only the non-empty parts with " | " -- never a bare leading/trailing
+// separator when a part is missing (the old TikTok " | 3 Bedrooms" bug).
+function joinParts(parts) {
+  return parts.filter(p => p !== null && p !== undefined && String(p).trim() !== '').join(' | ');
+}
+
+// Builds a caption from rows: null/false rows are dropped, '' is a blank line,
+// and runs of blank lines (from an empty section) collapse to one.
+function captionBlock(...rows) {
+  return rows
+    .filter(r => r !== null && r !== undefined && r !== false)
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// Plain-English noun for the condo-family LinkedIn note ("an executive
+// condominium (EC) in District 18").
+function homeNoun(listing, wing) {
+  if (wing === 'condo') return 'condominium';
+  if (wing === 'ec') return 'executive condominium (EC)';
+  if (wing === 'apartment') return 'apartment';
+  return listing.property_type ? listing.property_type.toLowerCase() : 'home';
+}
+
+// LinkedIn for a Home-wing listing. The Prestige version is a GCB market
+// read, which would be the wrong story for a condo -- and there is no condo
+// market figure on the Market Pulse panel to ground one in, so this stays a
+// short, plain, factual note (nothing invented, no hashtags).
+function buildLinkedInHomeCaption(listing, wing, agent) {
+  const noun = homeNoun(listing, wing);
+  const article = /^[aeiou]/i.test(noun) ? 'an' : 'a';
+  const where = listing.district_label ? ` in ${listing.district_label}` : '';
+  const signOff = [agent?.name, agent?.contact, agent?.agency].filter(Boolean).join('\n');
+  return captionBlock(
+    'New listing',
+    '',
+    `I'm currently representing ${article} ${noun}${where}${listing.features ? ` — ${listing.features}` : ''}. Glad to share more or arrange a viewing if it might suit you or someone you know — no pressure either way.`,
+    '',
+    signOff || null
+  );
+}
+
 function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) {
-  if (platform === 'linkedin') return buildLinkedInInsightCaption(listing, agent, marketPulse);
+  const wing = listingWing(listing);
+  const isHome = wing !== 'prestige';
+  if (platform === 'linkedin') {
+    return isHome ? buildLinkedInHomeCaption(listing, wing, agent) : buildLinkedInInsightCaption(listing, agent, marketPulse);
+  }
 
   // The raw street never appears in generated copy shown to buyers, on any
-  // platform -- captions below use only the district ("hide the road").
+  // platform -- captions below use only the district ("hide the road"). The
+  // same goes for a condo's project name: it is agent-only, never read here.
   // Exact price is a different rule per platform: PropertyGuru is an actual
   // portal listing field (not a caption) and keeps the real price, while the
   // FB/IG/WhatsApp/TikTok teaser captions below use maskedPrice (the
-  // "$X.XXM" convention) at most once each, per the caption copy rules.
+  // "$X.XXM" / "$8XXK" convention) at most once each, per the caption copy rules.
   const displayLocation = listing.district_label || '';
   const maskedPrice = maskPrice(listing.price);
+  const type = listing.property_type || '';
 
   const listingUrl = buildListingUrl(listing);
   const cleanContent = (listing.content || '')
@@ -200,13 +339,19 @@ function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) 
   // with an "on request"/invented placeholder the way the old template did --
   // a bullet either states a real fact or doesn't appear at all. Typically
   // lands on 5-7 bullets for a fully-filled-in listing, fewer for a sparser one.
+  // Home wing: a strata unit's size is just "sqft" (not "built-up"); tenure
+  // and a floor BAND (never a number) appear only when the agent entered them.
+  const tenure = String(listing.tenure || '').trim();
+  const floorLevel = String(listing.floor_level || '').trim();
   const bulletLines = [
-    listing.property_type,
+    type,
     displayLocation,
     listing.land_size ? `${listing.land_size.toLocaleString()} sqft land` : null,
-    listing.built_up ? `${listing.built_up.toLocaleString()} sqft built-up` : null,
+    listing.built_up ? `${listing.built_up.toLocaleString()} sqft${isHome ? '' : ' built-up'}` : null,
     formatBedroomsBullet(listing),
     formatBathroomsBullet(listing),
+    TENURE_TAGS[tenure] ? tenure.charAt(0).toUpperCase() + tenure.slice(1) : null,
+    ['Low', 'Mid', 'High'].includes(floorLevel) ? `${floorLevel} floor` : null,
     listing.features
   ].filter(Boolean);
   const bullets = bulletLines.map(line => `• ${line}`).join('\n');
@@ -224,7 +369,9 @@ function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) 
   // whatever text that style produced to the selected character limit.
   if (platform === 'propertyguru') {
     const limit = pgLimit || PROPERTYGURU_CHAR_LIMIT;
-    const header = `${listing.property_type} | ${displayLocation} | SGD ${formatPriceM(listing.price)}\n\n`;
+    const pgPrice = formatPriceDisplay(listing.price);
+    const headerLine = joinParts([type, displayLocation, pgPrice ? `SGD ${pgPrice}` : null]);
+    const header = headerLine ? `${headerLine}\n\n` : '';
     let source;
     if (style === 'tldr') source = bullets;
     else if (style === 'combined') source = `KEY FACTS\n${bullets}\n\nTHE FULL STORY\n${cleanContent}`;
@@ -232,127 +379,163 @@ function generateCaption(listing, platform, style, pgLimit, agent, marketPulse) 
     return header + truncateToLimit(source, Math.max(0, limit - header.length));
   }
 
+  const priceRow = maskedPrice ? `💰 ${maskedPrice}` : null;
+  const locationRow = displayLocation ? `📍 ${displayLocation}` : null;
+  const typeHeader = joinParts([type, displayLocation]);
+  // "Private viewing" is the Prestige register; Home keeps plain "viewing".
+  const viewing = isHome ? 'a viewing' : 'a private viewing';
+  const waType = type ? `*${type}*` : null;
+  const fbTags = hashtagLine(listing, wing, 'facebook');
+  const fbLongTags = hashtagLine(listing, wing, 'facebookLong');
+  const igTags = hashtagLine(listing, wing, 'instagram');
+  const igLongTags = hashtagLine(listing, wing, 'instagramLong');
+
   const tldr = {
-    facebook: `🏡 ${listing.property_type} | ${displayLocation}
-💰 ${maskedPrice}
+    facebook: captionBlock(
+      typeHeader ? `🏡 ${typeHeader}` : null,
+      priceRow,
+      '',
+      bullets,
+      '',
+      `Interested? Visit ${listingUrl} or drop us a message.`,
+      '',
+      fbTags
+    ),
 
-${bullets}
+    instagram: captionBlock(
+      type ? `🏡 ${type}` : null,
+      locationRow,
+      priceRow,
+      '',
+      bullets,
+      '',
+      `Contact me or visit ${listingUrl} 🏡`,
+      '',
+      igTags
+    ),
 
-Interested? Visit ${listingUrl} or drop us a message.
-
-#NestList #NestListPrestige #SingaporeProperty #GCB #LandedProperty #PropertySG #RealEstate #Singapore #LuxuryProperty`,
-
-    instagram: `🏡 ${listing.property_type}
-📍 ${displayLocation}
-💰 ${maskedPrice}
-
-${bullets}
-
-Contact me or visit ${listingUrl} 🏡
-
-#NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #PropertyForSale`,
-
-    whatsapp: `Hi! Quick summary of a new listing:
-
-*${listing.property_type}*
-📍 ${displayLocation}
-💰 ${maskedPrice}
-
-${bullets}
-
-Reply to arrange a private viewing or visit ${listingUrl}. Thank you! 🙏`
+    whatsapp: captionBlock(
+      'Hi! Quick summary of a new listing:',
+      '',
+      waType,
+      locationRow,
+      priceRow,
+      '',
+      bullets,
+      '',
+      `Reply to arrange ${viewing} or visit ${listingUrl}. Thank you! 🙏`
+    )
   };
 
   const long = {
-    facebook: `🏡 NEW LISTING | ${listing.property_type}
-📍 ${displayLocation}
-💰 ${maskedPrice}
+    facebook: captionBlock(
+      type ? `🏡 NEW LISTING | ${type}` : '🏡 NEW LISTING',
+      locationRow,
+      priceRow,
+      '',
+      body ? `${body}...` : null,
+      '',
+      `Interested? Visit ${listingUrl} or drop us a message.`,
+      '',
+      fbLongTags
+    ),
 
-${body}...
+    instagram: captionBlock(
+      type ? (isHome ? `🏡 ${type} for sale` : `✨ ${type} for sale ✨`) : null,
+      '',
+      locationRow,
+      priceRow,
+      '',
+      shortBody ? `${shortBody}...` : null,
+      '',
+      `Contact me or visit ${listingUrl} to find out more 🏡`,
+      '',
+      igLongTags
+    ),
 
-Interested? Visit ${listingUrl} or drop us a message.
-
-#NestList #NestListPrestige #SingaporeProperty #GCB #LandedProperty #PropertySG #RealEstate #Singapore #LuxuryProperty #HomeSweetHome`,
-
-    instagram: `✨ ${listing.property_type} for sale ✨
-
-📍 ${displayLocation}
-💰 ${maskedPrice}
-
-${shortBody}...
-
-Contact me or visit ${listingUrl} to find out more 🏡
-
-#NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #SingaporeLife #PropertyInvestment #LandedHouse #Bungalow #PenthouseLiving #PropertyForSale`,
-
-    whatsapp: `Hi! I have a new property listing that may interest you.
-
-*${listing.property_type}*
-📍 ${displayLocation}
-💰 ${maskedPrice}
-
-${listing.content?.slice(0, 400) || ''}...
-
-For more details and to arrange a private viewing, please reply to this message or visit ${listingUrl}.
-
-Thank you! 🙏`
+    whatsapp: captionBlock(
+      'Hi! I have a new property listing that may interest you.',
+      '',
+      waType,
+      locationRow,
+      priceRow,
+      '',
+      listing.content ? `${listing.content.slice(0, 400)}...` : null,
+      '',
+      `For more details and to arrange ${viewing}, please reply to this message or visit ${listingUrl}.`,
+      '',
+      'Thank you! 🙏'
+    )
   };
 
   const combined = {
-    facebook: `🏡 NEW LISTING | ${listing.property_type}
-📍 ${displayLocation}
-💰 ${maskedPrice}
+    facebook: captionBlock(
+      type ? `🏡 NEW LISTING | ${type}` : '🏡 NEW LISTING',
+      locationRow,
+      priceRow,
+      '',
+      '⚡ AT A GLANCE',
+      bullets,
+      '',
+      body ? '📖 THE FULL STORY' : null,
+      body ? `${body}...` : null,
+      '',
+      `Interested? Visit ${listingUrl} or drop us a message.`,
+      '',
+      fbLongTags
+    ),
 
-⚡ AT A GLANCE
-${bullets}
+    instagram: captionBlock(
+      type ? `🏡 ${type}` : null,
+      locationRow,
+      priceRow,
+      '',
+      '⚡ AT A GLANCE',
+      bullets,
+      '',
+      shortBody ? '📖 THE STORY' : null,
+      shortBody ? `${shortBody}...` : null,
+      '',
+      `Contact me or visit ${listingUrl} 🏡`,
+      '',
+      igTags
+    ),
 
-📖 THE FULL STORY
-${body}...
-
-Interested? Visit ${listingUrl} or drop us a message.
-
-#NestList #NestListPrestige #SingaporeProperty #GCB #LandedProperty #PropertySG #RealEstate #Singapore #LuxuryProperty #HomeSweetHome`,
-
-    instagram: `🏡 ${listing.property_type}
-📍 ${displayLocation}
-💰 ${maskedPrice}
-
-⚡ AT A GLANCE
-${bullets}
-
-📖 THE STORY
-${shortBody}...
-
-Contact me or visit ${listingUrl} 🏡
-
-#NestList #NestListPrestige #SingaporeProperty #SingaporeRealEstate #GCB #LandedProperty #LuxuryHomes #PropertySingapore #HomeSweetHome #SingaporeHome #PropertyAgent #RealEstateSingapore #LuxuryLiving #DreamHome #PropertyForSale`,
-
-    whatsapp: `Hi! I have a new property listing that may interest you.
-
-*${listing.property_type}*
-📍 ${displayLocation}
-💰 ${maskedPrice}
-
-⚡ AT A GLANCE
-${bullets}
-
-📖 THE FULL STORY
-${listing.content?.slice(0, 400) || ''}...
-
-Reply to arrange a private viewing or visit ${listingUrl}. Thank you! 🙏`
+    whatsapp: captionBlock(
+      'Hi! I have a new property listing that may interest you.',
+      '',
+      waType,
+      locationRow,
+      priceRow,
+      '',
+      '⚡ AT A GLANCE',
+      bullets,
+      '',
+      listing.content ? '📖 THE FULL STORY' : null,
+      listing.content ? `${listing.content.slice(0, 400)}...` : null,
+      '',
+      `Reply to arrange ${viewing} or visit ${listingUrl}. Thank you! 🙏`
+    )
   };
 
-  const tiktok = {
-    tiktok: `${listing.property_type} in ${displayLocation} 🏡
-${maskedPrice}
-${listing.land_size ? listing.land_size.toLocaleString() + ' sqft' : ''} | ${formatBedroomsBullet(listing) || ''}
-Upload your property video and use this caption 👆
-DM to arrange viewing 🔑
-
-#SingaporeProperty #PropertySG #LandedSG #RealEstateSG #SGProperty`
-  };
-
-  if (platform === 'tiktok') return tiktok.tiktok || '';
+  if (platform === 'tiktok') {
+    // Size: land for Prestige (as before); a Home unit has no land, so its
+    // floor area is the size worth stating.
+    const sizePart = isHome
+      ? (listing.built_up ? `${listing.built_up.toLocaleString()} sqft` : null)
+      : (listing.land_size ? `${listing.land_size.toLocaleString()} sqft` : null);
+    const factsLine = joinParts([sizePart, formatBedroomsBullet(listing)]);
+    const opener = [type, displayLocation ? `in ${displayLocation}` : ''].filter(Boolean).join(' ');
+    return captionBlock(
+      opener ? `${opener} 🏡` : '🏡',
+      maskedPrice || null,
+      factsLine || null,
+      'Upload your property video and use this caption 👆',
+      'DM to arrange viewing 🔑',
+      '',
+      hashtagLine(listing, wing, 'tiktok')
+    );
+  }
   if (style === 'tldr') return tldr[platform] || '';
   if (style === 'combined') return combined[platform] || '';
   return long[platform] || '';
