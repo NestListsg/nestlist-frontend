@@ -137,7 +137,9 @@ export default function PricingReports({ token }) {
     }
   }, [street, propertyType, landSize, projectName, builtUp, windowMonths, report, visibleColumns, sortKey, sortDir]);
 
-  const isCondoForm = isCondoFamilyType(propertyType);
+  // Penthouse is valued like a strata unit (built-up PSF vs condo/apartment sales), so it
+  // gets the project and built-up boxes too; land size is never used for it.
+  const isCondoForm = isCondoFamilyType(propertyType) || /penthouse/i.test(String(propertyType || ''));
   const strataReport = isStrataReport(report);
   // Columns that apply to the report on screen: the condo-only ones appear
   // only on a condo-family report, and "Land" reads "Area" there.
@@ -311,6 +313,26 @@ export default function PricingReports({ token }) {
               {report.data_stale
                 ? `Using our saved copy of URA sales${report.data_as_of ? ` from ${formatAsOf(report.data_as_of)}` : ''}; a fresh one is loading. Generate again in a few minutes for the very latest.`
                 : "⚠️ URA's data service only partly answered, so some recent sales may be missing from this report. Generate again later for a complete picture."}
+            </div>
+          )}
+
+          {typeof report.valuation_caveat === 'string' && report.valuation_caveat.trim() && (
+            <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.75)', marginBottom: '14px', padding: '8px 12px', border: '1px solid rgba(212,175,55,0.3)', borderRadius: '4px' }}>
+              {report.valuation_caveat}
+            </div>
+          )}
+
+          {typeof report.matched_project === 'string' && report.matched_project.trim() && (
+            <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.6)', marginBottom: '14px' }}>
+              Matched to URA development: {report.matched_project}
+              {report.project_match === 'close' && ' (a close match to the name you entered, not an exact one - please check it is the right development)'}
+              {report.project_match === 'ambiguous' && ' (the name matched more than one development - please check these are the right ones)'}
+            </div>
+          )}
+
+          {typeof report.type_note === 'string' && report.type_note.trim() && (
+            <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.6)', marginBottom: '14px' }}>
+              {report.type_note}
             </div>
           )}
 

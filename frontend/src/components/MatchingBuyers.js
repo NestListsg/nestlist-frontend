@@ -52,6 +52,9 @@ export default function MatchingBuyers({ token, listingId, listingSummary }) {
               <div style={{ fontSize: '13px' }}>
                 <span style={{ color: temp.color, fontWeight: 'bold', marginRight: '8px' }}>{temp.emoji} {m.name}</span>
                 <span style={{ color: 'rgba(248,244,236,0.5)', fontSize: '12px' }}>{m.reasons.join(' · ')}</span>
+                {m.tenure_unconfirmed && (
+                  <span style={{ marginLeft: '8px', fontSize: '11px', fontStyle: 'italic', color: 'rgba(240,200,74,0.7)' }}>Tenure not confirmed</span>
+                )}
               </div>
               {waUrl && (
                 <a href={waUrl} target="_blank" rel="noreferrer"
