@@ -514,15 +514,16 @@ export default function MyProfile({ agent, token, onUpdate }) {
 
         <div className="form-group">
           <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.6)', lineHeight: 1.6, maxWidth: '620px', marginBottom: '12px' }}>
-            Record about fifteen seconds of yourself on your phone, talking to the camera as you
+            Record about ten seconds of yourself on your phone, talking to the camera as you
             would to a client. This becomes the opening of every Signature video you order — and
             it is <strong style={{ color: 'rgba(248,244,236,0.8)' }}>really you</strong>, not a
             computer-generated version of you.
             <br /><br />
-            <strong style={{ color: 'rgba(248,244,236,0.8)' }}>What works best:</strong> stand a
-            couple of steps back so you are in frame from the waist up, face a window so the light
-            falls on you, prop the phone up rather than holding it, and keep the room quiet. Wear
-            what you would wear to a viewing.
+            <strong style={{ color: 'rgba(248,244,236,0.8)' }}>What works best:</strong> stand close
+            enough that your head and shoulders fill most of the frame, about a metre off the wall
+            so you do not cast a shadow on it, face a window so the light falls on you, prop the
+            phone up rather than holding it, and keep the room quiet. Wear what you would wear to
+            a viewing.
           </div>
 
           {presenterUrl ? (
