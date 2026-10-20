@@ -350,6 +350,21 @@ function publicLocationText(listing, projectLabel) {
   return [projectLabel, listing.district_label].filter(Boolean).join(', ');
 }
 
+// Same rules as the backend's _strip_cea_block: the "CEA Reg No:" line, any
+// "Agency: ... (Licence No: ...)" line, and the "Name | phone" line directly
+// above the reg-no line. Ordinary "|" lines are left alone. A condo write-up
+// already ends with this block, and the caption adds its own exactly once.
+const CEA_BLOCK_RE = /(?:^[^\n]*\|[^\n]*\n(?=CEA Reg No:))?^CEA Reg No:[^\n]*\n?|^Agency:[^\n]*\(Licence No:[^\n]*\)[^\n]*\n?/gm;
+
+function stripCeaBlock(text) {
+  if (!text) return text;
+  try {
+    return String(text).replace(CEA_BLOCK_RE, '').replace(/\n{3,}/g, '\n\n').trimEnd();
+  } catch {
+    return text;
+  }
+}
+
 function publicProjectLabel(listing) {
   if (!isCondoOnly(listing) || listing.hide_project_name === true) return '';
   return String(listing.project_name || '').trim();
@@ -418,11 +433,16 @@ function generateCaption(rawListing, platform, style, pgLimit, agent, marketPuls
 function generateCaptionCore(rawListing, platform, style, pgLimit, agent, marketPulse) {
   // The project name is scrubbed from the free text unless this is a condo-only
   // listing whose agent has left it public (publicProjectLabel).
-  const listing = (rawListing && rawListing.project_name && !publicProjectLabel(rawListing))
+  let listing = (rawListing && rawListing.project_name && !publicProjectLabel(rawListing))
     ? { ...rawListing, features: scrubProjectName(rawListing.features, rawListing), content: scrubProjectName(rawListing.content, rawListing) }
     : rawListing;
   const wing = listingWing(listing);
   const isHome = wing !== 'prestige';
+  // Condo-only: drop the write-up's own CEA block before any excerpt is cut;
+  // generateCaption appends one block. Landed text is never touched.
+  if (listing && isCondoOnly(listing) && listing.content) {
+    listing = { ...listing, content: stripCeaBlock(listing.content) };
+  }
   if (platform === 'linkedin') {
     return isHome ? buildLinkedInHomeCaption(listing, wing, agent) : buildLinkedInInsightCaption(listing, agent, marketPulse);
   }
