@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { formatPriceM, formatPriceDisplay, maskPrice } from '../utils/format';
+import { formatPriceM, formatPriceDisplay, maskPrice, stripCeaBlock } from '../utils/format';
 import { genUploadSession } from '../utils/uploadSession';
 import { listingWing, isCondoOnly } from '../utils/propertyTypes';
 import MatchingBuyers from '../components/MatchingBuyers';
@@ -348,21 +348,6 @@ function ecEligibilityLine(listing, wing) {
 // "The Marq, District 9" -- the project (when public) plus the district.
 function publicLocationText(listing, projectLabel) {
   return [projectLabel, listing.district_label].filter(Boolean).join(', ');
-}
-
-// Same rules as the backend's _strip_cea_block: the "CEA Reg No:" line, any
-// "Agency: ... (Licence No: ...)" line, and the "Name | phone" line directly
-// above the reg-no line. Ordinary "|" lines are left alone. A condo write-up
-// already ends with this block, and the caption adds its own exactly once.
-const CEA_BLOCK_RE = /(?:^[^\n]*\|[^\n]*\n(?=CEA Reg No:))?^CEA Reg No:[^\n]*\n?|^Agency:[^\n]*\(Licence No:[^\n]*\)[^\n]*\n?/gm;
-
-function stripCeaBlock(text) {
-  if (!text) return text;
-  try {
-    return String(text).replace(CEA_BLOCK_RE, '').replace(/\n{3,}/g, '\n\n').trimEnd();
-  } catch {
-    return text;
-  }
 }
 
 function publicProjectLabel(listing) {

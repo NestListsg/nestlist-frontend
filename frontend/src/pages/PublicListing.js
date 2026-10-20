@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { formatPriceDisplay } from '../utils/format';
+import { formatPriceDisplay, stripCeaBlock } from '../utils/format';
 import { isCondoOnly } from '../utils/propertyTypes';
 
 const API = process.env.REACT_APP_API_URL || '';
@@ -120,6 +120,9 @@ export default function PublicListing() {
   // floor BAND. Never the project name, which the backend does not send.
   const publicTenure = ['Freehold', '99-year leasehold', '999-year leasehold'].includes(listing?.tenure) ? listing.tenure : '';
   const publicFloor = ['Low', 'Mid', 'High'].includes(listing?.floor_level) ? listing.floor_level : '';
+  // Condo-only listings with complete CEA details show them in the agent box below;
+  // the write-up's own trailing copy of the block is then dropped so it shows once.
+  const showCeaBlock = !!listing && isCondoOnly(listing) && !!(listing.agent && listing.agent.cea_reg_no && listing.agent.agency_name && listing.agent.agency_licence_no);
 
   return (
     <div style={wrapStyle}>
@@ -197,14 +200,14 @@ export default function PublicListing() {
       )}
 
       <div style={{ fontSize: '15px', lineHeight: '1.8', color: 'var(--cream-dim)', whiteSpace: 'pre-wrap', marginBottom: '32px' }}>
-        {cleanContent(listing.content)}
+        {cleanContent(showCeaBlock ? stripCeaBlock(listing.content) : listing.content)}
       </div>
 
       {listing.agent && listing.agent.name && (
         <div style={{ fontSize: '13px', color: 'var(--cream-faint)', marginBottom: '32px', borderTop: '1px solid rgba(212,175,55,0.2)', paddingTop: '16px' }}>
           Listed by {listing.agent.name}{listing.agent.agency ? ` · ${listing.agent.agency}` : ''}
           {/* CEA details: condo-family listings only, and only when all are present. */}
-          {isCondoOnly(listing) && listing.agent.cea_reg_no && listing.agent.agency_name && listing.agent.agency_licence_no && (
+          {showCeaBlock && (
             <div style={{ marginTop: '6px', lineHeight: 1.6 }}>
               {listing.agent.contact && <div>{listing.agent.name} | {listing.agent.contact}</div>}
               <div>CEA Reg No: {listing.agent.cea_reg_no}</div>
