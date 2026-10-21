@@ -136,18 +136,19 @@ export default function PublicListing() {
         </div>
       )}
 
-      {/* If there is no video this renders nothing -- no empty player, no
-          placeholder. The film is 9:16, matching the agent-facing player in
-          MyListings.js.
+      {/* Signature (4:3) takes priority over Classic (9:16) when both exist. If
+          neither video exists this renders nothing -- no empty player, no
+          placeholder. The two tiers are different shapes so aspectRatio/maxWidth
+          are set per-tier, matching the agent-facing player in MyListings.js.
           Not muted: nothing autoplays here, so muting would only rob the buyer
           of the score -- these films carry a real scored piano bed. */}
-      {listing.video_url && (
+      {(listing.signature_video_url || listing.video_url) && (
         <div style={{ marginBottom: '28px' }}>
           <div
             style={{
               width: '100%',
-              maxWidth: '320px',
-              aspectRatio: '9 / 16',
+              maxWidth: listing.signature_video_url ? '460px' : '320px',
+              aspectRatio: listing.signature_video_url ? '4 / 3' : '9 / 16',
               margin: '0 auto',
               borderRadius: '4px',
               border: '1px solid rgba(212,175,55,0.3)',
@@ -156,7 +157,7 @@ export default function PublicListing() {
             }}
           >
             <video
-              src={listing.video_url}
+              src={listing.signature_video_url || listing.video_url}
               controls
               playsInline
               preload="metadata"
