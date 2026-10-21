@@ -36,11 +36,6 @@ export default function MyProfile({ agent, token, onUpdate }) {
   const [avatarPhotos, setAvatarPhotos] = useState(agent.avatar_photos || []);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState('');
-  // The agent's own clip of themselves speaking -- the opening of a Signature video.
-  // Real footage, not a generated avatar.
-  const [presenterUrl, setPresenterUrl] = useState(agent.presenter_video_url || '');
-  const [presenterBusy, setPresenterBusy] = useState(false);
-  const [presenterError, setPresenterError] = useState('');
   const [greetingCopied, setGreetingCopied] = useState(false);
   const [posterTemplates, setPosterTemplates] = useState([]);
   const [changingEmail, setChangingEmail] = useState(false);
@@ -356,48 +351,6 @@ export default function MyProfile({ agent, token, onUpdate }) {
     }
   };
 
-  const handlePresenterSelect = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = '';                       // let the same file be re-picked after a failure
-    if (!file) return;
-    setPresenterBusy(true); setPresenterError('');
-    try {
-      const body = new FormData();
-      body.append('file', file);
-      const res = await fetch(`${API}/api/profile/presenter-video`, {
-        method: 'POST',
-        // No Content-Type here on purpose — the browser must set the multipart
-        // boundary itself, and setting it by hand breaks the upload.
-        headers: { Authorization: `Bearer ${token}` },
-        body,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Upload failed');
-      setPresenterUrl(data.presenter_video_url);
-      onUpdate({ ...agent, presenter_video_url: data.presenter_video_url });
-    } catch (err) {
-      setPresenterError(err.message);
-    } finally {
-      setPresenterBusy(false);
-    }
-  };
-
-  const handlePresenterRemove = async () => {
-    setPresenterError('');
-    try {
-      const res = await fetch(`${API}/api/profile/presenter-video`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Could not remove');
-      setPresenterUrl('');
-      onUpdate({ ...agent, presenter_video_url: null });
-    } catch (err) {
-      setPresenterError(err.message);
-    }
-  };
-
   const handleAvatarRemove = async (url) => {
     setAvatarError('');
     try {
@@ -453,18 +406,13 @@ export default function MyProfile({ agent, token, onUpdate }) {
           </div>
         </div>
 
-        <div className="section-label" style={{ marginTop: '26px' }}>Photos of You (for Signature videos)</div>
+        <div className="section-label" style={{ marginTop: '26px' }}>Photos of You (optional)</div>
 
         <div className="form-group">
           <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.6)', lineHeight: 1.6, maxWidth: '620px', marginBottom: '12px' }}>
-            Give us a few photos of yourself once, and we use them for every Signature video you
-            ever order — you never have to do this again. This is separate from the headshot
-            above, which is just for your posters.
-            <br /><br />
-            <strong style={{ color: 'rgba(248,244,236,0.8)' }}>What works best:</strong> three to five
-            photos — facing the camera, and turned slightly to each side. Even daylight, nothing
-            harsh. No sunglasses or hat. Wear what you would wear to a viewing, because that is
-            what you will be wearing in the video.
+            Nothing in NestList uses these photos yet, and nothing is made from them. If you add
+            some, they are simply kept with your profile in case we offer something that needs them
+            later. This is separate from the headshot above, which is what your posters use.
           </div>
 
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -505,68 +453,9 @@ export default function MyProfile({ agent, token, onUpdate }) {
             )}
           </div>
           <div style={{ fontSize: '11px', color: 'rgba(248,244,236,0.4)', marginTop: '8px' }}>
-            {avatarPhotos.length}/8 added. Signature videos are made for you and are not generated instantly.
+            {avatarPhotos.length}/8 added. Nothing uses these photos yet.
           </div>
           {avatarError && <div className="error-msg">{avatarError}</div>}
-        </div>
-
-        <div className="section-label" style={{ marginTop: '26px' }}>Your Presenting Clip (for Signature videos)</div>
-
-        <div className="form-group">
-          <div style={{ fontSize: '12px', color: 'rgba(248,244,236,0.6)', lineHeight: 1.6, maxWidth: '620px', marginBottom: '12px' }}>
-            Record about ten seconds of yourself on your phone, talking to the camera as you
-            would to a client. This becomes the opening of every Signature video you order — and
-            it is <strong style={{ color: 'rgba(248,244,236,0.8)' }}>really you</strong>, not a
-            computer-generated version of you.
-            <br /><br />
-            <strong style={{ color: 'rgba(248,244,236,0.8)' }}>What works best:</strong> stand close
-            enough that your head and shoulders fill most of the frame, about a metre off the wall
-            so you do not cast a shadow on it, face a window so the light falls on you, prop the
-            phone up rather than holding it, and keep the room quiet. Wear what you would wear to
-            a viewing.
-          </div>
-
-          {presenterUrl ? (
-            <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-              <video
-                src={presenterUrl}
-                controls
-                playsInline
-                preload="metadata"
-                style={{ width: '200px', borderRadius: '3px', border: '1px solid rgba(212,175,55,0.3)', background: '#000' }}
-              />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label className="btn-gold" style={{ maxWidth: '190px', display: 'inline-block', cursor: 'pointer', textAlign: 'center' }}>
-                  {presenterBusy ? 'Uploading...' : 'Replace Clip'}
-                  <input type="file" accept="video/*" onChange={handlePresenterSelect} disabled={presenterBusy} style={{ display: 'none' }} />
-                </label>
-                <button
-                  type="button"
-                  onClick={handlePresenterRemove}
-                  disabled={presenterBusy}
-                  style={{
-                    background: 'transparent', border: '1px solid rgba(212,175,55,0.35)',
-                    color: 'rgba(248,244,236,0.7)', padding: '8px 14px', borderRadius: '3px',
-                    fontSize: '12px', fontFamily: "'Montserrat', sans-serif", cursor: 'pointer'
-                  }}
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
-          ) : (
-            <label className="btn-gold" style={{ maxWidth: '220px', display: 'inline-block', cursor: 'pointer', textAlign: 'center' }}>
-              {presenterBusy ? 'Uploading...' : 'Upload Your Clip'}
-              <input type="file" accept="video/*" onChange={handlePresenterSelect} disabled={presenterBusy} style={{ display: 'none' }} />
-            </label>
-          )}
-
-          <div style={{ fontSize: '11px', color: 'rgba(248,244,236,0.4)', marginTop: '8px' }}>
-            {presenterBusy
-              ? 'Uploading and preparing your clip — this can take a minute on a slow connection.'
-              : 'Record about ten seconds talking to the camera. We use five of them, starting from your first word, so a pause before you begin is fine. Stand close enough that your head and shoulders fill most of the frame. Up to 200MB.'}
-          </div>
-          {presenterError && <div className="error-msg">{presenterError}</div>}
         </div>
 
         <div className="form-grid">
