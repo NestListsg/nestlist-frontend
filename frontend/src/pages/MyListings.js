@@ -877,6 +877,9 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   // picker hidden); musicChoice is the agent's pick ('auto' or a track id), shared by
   // every listing card since it's a taste preference, not a per-listing setting.
   const [musicTracks, setMusicTracks] = useState([]);
+  // Has the track list actually loaded? False while waiting or after a failed lookup. An empty
+  // list we did not manage to load is not the same as "no tracks offered".
+  const [musicTracksKnown, setMusicTracksKnown] = useState(false);
   const [musicChoice, setMusicChoice] = useState(readSavedMusicChoice);
 
   // Feeds the LinkedIn write-up's market-insight opening -- fetched once, not
@@ -1001,10 +1004,12 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       const data = await r.json();
       const tracks = Array.isArray(data?.tracks) ? data.tracks.filter(t => t && t.id) : [];
       setMusicTracks(tracks);
+      setMusicTracksKnown(true);
       return tracks;
     } catch {
       // Fail soft: no list means no picker, and videos generate with Auto exactly as before.
       setMusicTracks([]);
+      setMusicTracksKnown(false);
       return null;
     }
   };
@@ -1014,10 +1019,14 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     // eslint-disable-next-line
   }, [token]);
 
-  // A saved pick can outlive its track (removed server-side). Treat it as Auto for
-  // display and for sending, without overwriting what's saved.
+  // A saved pick can outlive its track (removed server-side). Once the list has really
+  // loaded, treat a missing track as Auto for display and for sending, without overwriting
+  // what's saved. Until then (still loading, or the lookup failed) we cannot tell, so the
+  // saved pick is kept and sent as it is: if the track is gone the server says so and the
+  // "That music option is no longer available" path below switches to Auto honestly.
   const effectiveMusicChoice =
-    musicChoice !== MUSIC_AUTO && musicTracks.some(t => t.id === musicChoice) ? musicChoice : MUSIC_AUTO;
+    !musicTracksKnown ? musicChoice
+      : musicChoice !== MUSIC_AUTO && musicTracks.some(t => t.id === musicChoice) ? musicChoice : MUSIC_AUTO;
 
   const handleMusicChange = (id) => {
     setMusicChoice(id);
@@ -1064,11 +1073,25 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const videoStyleAvailable = (id) => offeredVideoIds.has(id) || (id === 'classic' && offeredVideoIds.size === 0);
   const videoStylesUnknown = videoTemplatesStatus !== 'ok';
 
-  // The style the next press will use. A saved or remembered style the server no longer
-  // offers (or does not offer yet) falls back to Classic rather than failing.
+  // The style the next press will use. Only once the server's list has really loaded do we
+  // fall back to Classic for a style it does not offer. While we are still waiting, or the
+  // lookup failed, we do not know -- so the agent's remembered style stays as it is (it must
+  // never be swapped for Classic just because of a slow or failed lookup).
   const selectedVideoTemplateFor = (listing) => {
     const wanted = videoTemplateChoice[listing.id] || listing.video_template_id || 'classic';
+    if (videoStylesUnknown) return wanted;
     return videoStyleAvailable(wanted) ? wanted : 'classic';
+  };
+
+  // What to put in the generate request for video_template_id (null = leave it off).
+  // The server treats a style we name as a deliberate choice: it saves it on the listing, and
+  // if that style is switched off it refuses. A style we merely remember is different -- with
+  // none named, the server uses what the listing last had, makes Classic if that style is
+  // unavailable, and puts the listing right itself. So while the styles list is unknown, only a
+  // style the agent clicked this visit is sent; a remembered one is left to the server.
+  const videoTemplateToSendFor = (listing) => {
+    if (videoStylesUnknown) return videoTemplateChoice[listing.id] || null;
+    return selectedVideoTemplateFor(listing);
   };
 
   // A stored featured-photo index can go stale (e.g. a photo was deleted
@@ -1475,7 +1498,8 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
     setVideoQueueMsg(m => ({ ...m, [listing.id]: '' }));
     setVideoPhotoNotes(n => ({ ...n, [listing.id]: [] }));
     try {
-      const videoTemplateId = selectedVideoTemplateFor(listing);
+      const videoTemplateId = videoTemplateToSendFor(listing);
+      const templateParam = videoTemplateId ? `video_template_id=${encodeURIComponent(videoTemplateId)}&` : '';
       const photoIndex = getFeaturedIndex(listing);
       // Auto = leave the param off entirely so the backend picks its default (today's behaviour).
       const musicParam = effectiveMusicChoice !== MUSIC_AUTO
@@ -1485,7 +1509,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
       // repeated param per photo, in video order, as the exact URLs from listing.images.
       const pickedPhotos = videoPhotoStateFor(listing).urls;
       const photosParam = pickedPhotos.map(u => `&video_photos=${encodeURIComponent(u)}`).join('');
-      const res = await fetch(`${API}/api/listings/${listing.id}/generate-video?video_template_id=${videoTemplateId}&photo_index=${photoIndex}${musicParam}${photosParam}`, {
+      const res = await fetch(`${API}/api/listings/${listing.id}/generate-video?${templateParam}photo_index=${photoIndex}${musicParam}${photosParam}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -2757,7 +2781,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                         .map(t => ({ id: t.id, name: t.name || t.id, ai: false, blurb: '' })),
                     ].map(c => {
                       const available = videoStyleAvailable(c.id);
-                      const selected = available && selectedVideoTemplateFor(l) === c.id;
+                      const selected = (available || videoStylesUnknown) && selectedVideoTemplateFor(l) === c.id;
                       return (
                         <button
                           key={c.id}
@@ -2798,7 +2822,8 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                   </div>
                   {videoTemplatesStatus === 'failed' && (
                     <div style={{ color: 'rgba(240,200,74,0.85)', fontSize: '12px', marginBottom: '10px', maxWidth: '760px' }}>
-                      Couldn't load the video styles. Classic still works.{' '}
+                      Couldn't load the video styles. Classic still works.
+                      {selectedVideoTemplateFor(l) !== 'classic' && ` We'll use ${(VIDEO_CHOICES.find(c => c.id === selectedVideoTemplateFor(l)) || {}).name || 'your saved style'} again if we can, and Classic if we can't.`}{' '}
                       <button
                         type="button"
                         onClick={retryVideoTemplates}
