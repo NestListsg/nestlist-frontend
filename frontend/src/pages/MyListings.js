@@ -22,7 +22,8 @@ const saveMusicChoice = (id) => {
 
 // The three video styles an agent can choose between. This list only holds the wording and
 // the order; whether a style can actually be made right now comes from the server's
-// /api/video-templates list (an id that is not in it shows as "Not available yet").
+// /api/video-templates list (an id that is not in it shows as "Not available yet"; if the
+// list itself could not be loaded we say so and offer Try again instead).
 // `ai` marks the two makeover styles, which show an AI-made picture of the property.
 const VIDEO_CHOICES = [
   { id: 'classic', name: 'Classic', ai: false,
@@ -854,6 +855,11 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const [posterTemplates, setPosterTemplates] = useState([]);
   const [posterTemplateChoice, setPosterTemplateChoice] = useState({});
   const [videoTemplates, setVideoTemplates] = useState([]);
+  // Did the styles list load? 'loading' | 'ok' | 'failed'. Kept apart from the list itself so
+  // "could not load it" is never mistaken for "this style is not built yet". videoTemplatesTry
+  // is bumped by the Try again button to run the fetch once more.
+  const [videoTemplatesStatus, setVideoTemplatesStatus] = useState('loading');
+  const [videoTemplatesTry, setVideoTemplatesTry] = useState(0);
   const [videoTemplateChoice, setVideoTemplateChoice] = useState({});
   // Agent's photo pick for the Classic video, listingId -> { mode: 'auto'|'custom', urls }.
   // No entry = Auto. Mirrored to localStorage (guarded) because the server doesn't store it.
@@ -935,13 +941,34 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   }, [token]);
 
   useEffect(() => {
+    // `cancelled` stops an old answer landing after a retry (or after leaving the page).
+    let cancelled = false;
     fetch(`${API}/api/video-templates`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(r => r.json())
-      .then(data => setVideoTemplates(Array.isArray(data) ? data : []))
-      .catch(() => setVideoTemplates([]));
-  }, [token]);
+      .then(data => {
+        if (cancelled) return;
+        if (Array.isArray(data)) {
+          setVideoTemplates(data);
+          setVideoTemplatesStatus('ok');
+        } else {
+          setVideoTemplates([]);
+          setVideoTemplatesStatus('failed');
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setVideoTemplates([]);
+        setVideoTemplatesStatus('failed');
+      });
+    return () => { cancelled = true; };
+  }, [token, videoTemplatesTry]);
+
+  const retryVideoTemplates = () => {
+    setVideoTemplatesStatus('loading');
+    setVideoTemplatesTry(n => n + 1);
+  };
 
   // Remember the photo limit the server reports (max_video_photos on the generate and status
   // responses). Ignores anything that is not a sensible whole number.
@@ -1028,11 +1055,14 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const selectedTemplateFor = (listing) =>
     posterTemplateChoice[listing.id] || listing.poster_template_id || agent.poster_template_id || 'editorial';
 
-  // Which video styles the server offers right now. If the list could not be loaded at all,
-  // Classic is still treated as available (it is what the server uses when none is named),
-  // so a failed lookup never leaves the agent unable to make a video.
+  // Which video styles the server offers right now. If the list is empty or could not be
+  // loaded, Classic is still treated as available (it is what the server uses when none is
+  // named), so a failed lookup never leaves the agent unable to make a video.
+  // videoStylesUnknown = we do not know yet (still loading, or the lookup failed), so a style
+  // that is missing from the list must not be called "not available" -- we just do not know.
   const offeredVideoIds = new Set(videoTemplates.map(t => t && t.id).filter(id => typeof id === 'string'));
   const videoStyleAvailable = (id) => offeredVideoIds.has(id) || (id === 'classic' && offeredVideoIds.size === 0);
+  const videoStylesUnknown = videoTemplatesStatus !== 'ok';
 
   // The style the next press will use. A saved or remembered style the server no longer
   // offers (or does not offer yet) falls back to Classic rather than failing.
@@ -2756,12 +2786,37 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                             <span style={{ fontSize: '11px', lineHeight: 1.4, color: 'rgba(248,244,236,0.6)' }}>{c.blurb}</span>
                           )}
                           {!available && (
-                            <span style={{ fontSize: '11px', color: 'rgba(248,244,236,0.8)' }}>Not available yet</span>
+                            <span style={{ fontSize: '11px', color: 'rgba(248,244,236,0.8)' }}>
+                              {videoTemplatesStatus === 'loading' ? 'Checking...'
+                                : videoStylesUnknown ? "Couldn't check this one"
+                                : 'Not available yet'}
+                            </span>
                           )}
                         </button>
                       );
                     })}
                   </div>
+                  {videoTemplatesStatus === 'failed' && (
+                    <div style={{ color: 'rgba(240,200,74,0.85)', fontSize: '12px', marginBottom: '10px', maxWidth: '760px' }}>
+                      Couldn't load the video styles. Classic still works.{' '}
+                      <button
+                        type="button"
+                        onClick={retryVideoTemplates}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid rgba(212,175,55,0.4)',
+                          color: '#F0C84A',
+                          padding: '4px 10px',
+                          borderRadius: '3px',
+                          fontSize: '12px',
+                          fontFamily: "'Montserrat', sans-serif",
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  )}
                   {(() => {
                     const picked = VIDEO_CHOICES.find(c => c.id === selectedVideoTemplateFor(l));
                     return picked && picked.ai ? (
