@@ -20,6 +20,20 @@ const saveMusicChoice = (id) => {
   try { window.localStorage.setItem(MUSIC_CHOICE_KEY, id); } catch { /* ignore */ }
 };
 
+// The three video styles an agent can choose between. This list only holds the wording and
+// the order; whether a style can actually be made right now comes from the server's
+// /api/video-templates list (an id that is not in it shows as "Not available yet").
+// `ai` marks the two makeover styles, which show an AI-made picture of the property.
+const VIDEO_CHOICES = [
+  { id: 'classic', name: 'Classic', ai: false,
+    blurb: 'Your photos set to music, with gentle camera movement. For a home that already looks the part.' },
+  { id: 'dramatic', name: 'Dramatic', ai: true,
+    blurb: 'Shows the home made over: the old furniture flies out of each room towards you.' },
+  { id: 'gentle', name: 'Gentle', ai: true,
+    blurb: 'The same makeover, but calmer: furniture is carried out piece by piece and the new design moves in.' },
+];
+const VIDEO_AI_NOTE = 'The makeover videos are an AI-made picture of how the home could look, not photos of the real thing.';
+
 // Which photos go into the Classic video, per listing: { [listingId]: { mode, urls } }.
 // The backend does NOT remember this -- Auto means we send nothing and it chooses; a
 // custom pick is resent on every generate. We keep the pick in this browser so it
@@ -1014,8 +1028,18 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
   const selectedTemplateFor = (listing) =>
     posterTemplateChoice[listing.id] || listing.poster_template_id || agent.poster_template_id || 'editorial';
 
-  const selectedVideoTemplateFor = (listing) =>
-    videoTemplateChoice[listing.id] || listing.video_template_id || 'classic';
+  // Which video styles the server offers right now. If the list could not be loaded at all,
+  // Classic is still treated as available (it is what the server uses when none is named),
+  // so a failed lookup never leaves the agent unable to make a video.
+  const offeredVideoIds = new Set(videoTemplates.map(t => t && t.id).filter(id => typeof id === 'string'));
+  const videoStyleAvailable = (id) => offeredVideoIds.has(id) || (id === 'classic' && offeredVideoIds.size === 0);
+
+  // The style the next press will use. A saved or remembered style the server no longer
+  // offers (or does not offer yet) falls back to Classic rather than failing.
+  const selectedVideoTemplateFor = (listing) => {
+    const wanted = videoTemplateChoice[listing.id] || listing.video_template_id || 'classic';
+    return videoStyleAvailable(wanted) ? wanted : 'classic';
+  };
 
   // A stored featured-photo index can go stale (e.g. a photo was deleted
   // elsewhere, or the backend index predates a photo removal) and point past
@@ -2694,32 +2718,56 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                     <div key={i} style={{ color: 'rgba(240,200,74,0.85)', fontSize: '12px', marginTop: '8px' }}>{w}</div>
                   ))}
 
-                  {videoTemplates.length > 0 && (
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '14px', marginBottom: '10px' }}>
-                      {videoTemplates.map(t => {
-                        const selected = selectedVideoTemplateFor(l) === t.id;
-                        return (
-                          <button
-                            key={t.id}
-                            type="button"
-                            onClick={() => setVideoTemplateChoice(c => ({ ...c, [l.id]: t.id }))}
-                            style={{
-                              background: selected ? 'rgba(212,175,55,0.2)' : 'transparent',
-                              border: `1px solid ${selected ? '#D4AF37' : 'rgba(212,175,55,0.25)'}`,
-                              color: selected ? '#F0C84A' : 'rgba(248,244,236,0.7)',
-                              padding: '6px 14px',
-                              borderRadius: '3px',
-                              cursor: 'pointer',
-                              fontSize: '11px',
-                              fontFamily: "'Montserrat', sans-serif"
-                            }}
-                          >
-                            {selected ? '✓ ' : ''}{t.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <div role="radiogroup" aria-label="Video style" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '10px', marginTop: '14px', marginBottom: '10px', maxWidth: '760px' }}>
+                    {[
+                      ...VIDEO_CHOICES,
+                      // Any other style the server offers that we have no wording for still shows, by its own name.
+                      ...videoTemplates
+                        .filter(t => t && typeof t.id === 'string' && !VIDEO_CHOICES.some(c => c.id === t.id))
+                        .map(t => ({ id: t.id, name: t.name || t.id, ai: false, blurb: '' })),
+                    ].map(c => {
+                      const available = videoStyleAvailable(c.id);
+                      const selected = available && selectedVideoTemplateFor(l) === c.id;
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          disabled={!available || !!videoLoading[l.id]}
+                          onClick={() => setVideoTemplateChoice(ch => ({ ...ch, [l.id]: c.id }))}
+                          style={{
+                            background: selected ? 'rgba(212,175,55,0.2)' : 'transparent',
+                            border: `1px solid ${selected ? '#D4AF37' : 'rgba(212,175,55,0.25)'}`,
+                            color: selected ? '#F0C84A' : 'rgba(248,244,236,0.7)',
+                            padding: '10px 12px',
+                            borderRadius: '3px',
+                            cursor: available && !videoLoading[l.id] ? 'pointer' : 'default',
+                            opacity: available ? 1 : 0.5,
+                            textAlign: 'left',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                            fontFamily: "'Montserrat', sans-serif"
+                          }}
+                        >
+                          <span style={{ fontSize: '12px' }}>{selected ? '✓ ' : ''}{c.name}</span>
+                          {c.blurb && (
+                            <span style={{ fontSize: '11px', lineHeight: 1.4, color: 'rgba(248,244,236,0.6)' }}>{c.blurb}</span>
+                          )}
+                          {!available && (
+                            <span style={{ fontSize: '11px', color: 'rgba(248,244,236,0.8)' }}>Not available yet</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {(() => {
+                    const picked = VIDEO_CHOICES.find(c => c.id === selectedVideoTemplateFor(l));
+                    return picked && picked.ai ? (
+                      <div style={{ color: 'rgba(240,200,74,0.85)', fontSize: '12px', marginBottom: '10px', maxWidth: '760px' }}>{VIDEO_AI_NOTE}</div>
+                    ) : null;
+                  })()}
 
                   {l.video_url && (
                     <div style={{ marginBottom: '10px' }}>
@@ -2781,7 +2829,7 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                     {l.video_url && (
                       <button
                         type="button"
-                        onClick={() => handleDownloadFile(l.video_url, `${l.id.slice(0, 8)}-classic.mp4`)}
+                        onClick={() => handleDownloadFile(l.video_url, `${l.id.slice(0, 8)}-${VIDEO_CHOICES.some(c => c.id === l.video_template_id) ? l.video_template_id : 'classic'}.mp4`)}
                         style={downloadButtonStyle}
                       >
                         ⬇ Download
