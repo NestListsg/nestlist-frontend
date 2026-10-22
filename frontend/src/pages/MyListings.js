@@ -26,7 +26,7 @@ const saveMusicChoice = (id) => {
 // `ai` marks the two makeover styles, which show an AI-made picture of the property.
 const VIDEO_CHOICES = [
   { id: 'classic', name: 'Classic', ai: false,
-    blurb: 'Your photos set to music, with gentle camera movement. For a home that already looks the part.' },
+    blurb: 'Your photos set to music, with the camera moving through each room. For a home that already looks the part.' },
   { id: 'dramatic', name: 'Dramatic', ai: true,
     blurb: 'Shows the home made over: the old furniture flies out of each room towards you.' },
   { id: 'gentle', name: 'Gentle', ai: true,
@@ -2798,6 +2798,14 @@ export default function MyListings({ agent, token, onEdit, listingsTab, onListin
                           style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
                         />
                       </div>
+                      {(() => {
+                        const made = VIDEO_CHOICES.find(c => c.id === l.video_template_id);
+                        return made ? (
+                          <div style={{ color: 'rgba(248,244,236,0.55)', fontSize: '11px', textAlign: 'center', marginTop: '6px' }}>
+                            {made.name} video{made.ai ? ' - AI-made picture of the property' : ''}
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
                   )}
                   <VideoPhotoPicker
