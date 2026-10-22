@@ -29,7 +29,7 @@ const VIDEO_CHOICES = [
     blurb: 'Your photos set to music, with the camera moving through each room. For a home that already looks the part.' },
   { id: 'dramatic', name: 'Dramatic', ai: true,
     blurb: 'Shows the home made over: the old furniture flies out of each room towards you.' },
-  { id: 'gentle', name: 'Elegant', ai: true,
+  { id: 'elegant', name: 'Elegant', ai: true,
     blurb: 'The same makeover, but calmer: furniture is carried out piece by piece and the new design moves in.' },
 ];
 const VIDEO_AI_NOTE = 'The makeover videos are an AI-made picture of how the home could look, not photos of the real thing.';
